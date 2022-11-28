@@ -25,7 +25,42 @@ public class BTree {
     }
 
     public void insert(String key) {
-        // TODO
+        /*
+        if this == root node,
+            if root is full,
+                split root node in leaf 1 and leaf 2
+
+        else:
+            if this is full,
+                split this node to leaf 1 and leaf 2
+                redistribute keys in leaf 1 to leaf 1 and 2
+                move index to leaf 1 and leaf 2 parent (store parent info)
+
+
+
+         */
+
+    }
+
+//    private void insertLeadNode(Record record) {
+//
+//    }
+//
+//    private void insertInternalNode (Record record) {
+//
+//    }
+
+
+    private void splitRootNode(Node root) {
+        // split and return ?
+    }
+
+    private void splitInternalNode() {
+
+    }
+
+    private void splitLeafNode() {
+
     }
 
     public void delete(String key) {
