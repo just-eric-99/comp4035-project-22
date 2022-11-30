@@ -2,12 +2,16 @@ import java.util.List;
 
 public class BTree {
     private Node root = null;
+    private static final double minFillFactor = 0.5;
+    private static final int fanout = 5;
 
-    private interface Node {
-        double fillFactor();
+    private abstract class Node {
+        int length = 0;
+
+        protected abstract double fillFactor();
     }
 
-    private class IndexNode implements Node {
+    private class IndexNode extends Node {
         String[] keys;
         Node[] childNodes;
 
@@ -30,14 +34,15 @@ public class BTree {
             for (String k : keys) {
                 if (k != null) total += 1;
             }
-            return total / keys.length;
+            return (double) total / keys.length;
         }
     }
 
-    private class LeafNode implements Node {
+    private class LeafNode extends Node {
         Record[] records;
         LeafNode leftLeafNode;
         LeafNode rightLeafNode;
+        int length = 0;
 
         LeafNode find(String key) {
             for (Record r : records)
@@ -45,13 +50,14 @@ public class BTree {
             throw new KeyNotFoundException(key);
         }
 
+
         @Override
         public double fillFactor() {
             int total = 0;
             for (Record r : records) {
                 if (r != null) total += 1;
             }
-            return total / records.length;
+            return (double) total / records.length;
         }
     }
 
@@ -138,15 +144,32 @@ public class BTree {
 
         IndexNode in = (IndexNode) node;
 
-        for (int i = 0; i < in.keys.length; i++) {
-            if (key.compareTo(in.keys[i]) < 0)
+        int i = 0;
+
+        for (; i < in.keys.length; i++) {
+            if (key.compareTo(in.keys[i]) < 0) {
                 delete(key, in.childNodes[i]);
-            else if (key.compareTo(in.keys[i]) == 0 || i == in.keys.length - 1)
-                delete(key, in.childNodes[i + 1]);
+                break;
+            } else if (key.compareTo(in.keys[i]) == 0 || i == in.keys.length - 1) {
+                i = i + 1;
+                delete(key, in.childNodes[i]);
+                break;
+            }
         }
 
-        // TODO
         // Check fill factor
+        // Not underflow
+        if (in.childNodes[i].fillFactor() < minFillFactor)
+            return;
+
+        double fillFactor = in.childNodes[i].fillFactor();
+        if (i - 1 >= 0 && fillFactor > minFillFactor) {
+            if (fillFactor - (double) 1 / (fanout - 1) < minFillFactor) {
+                // TODO Merge
+            } else {
+                // TODO From Sibling
+            }
+        }
     }
 
     public List<String> search(String key1, String key2) {
