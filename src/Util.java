@@ -48,5 +48,7 @@ public class Util {
         for (Integer i : a) {
             System.out.print(i + " ");
         }
+
+        System.out.println("bab".compareTo("xa"));
     }
 }

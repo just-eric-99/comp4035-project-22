@@ -6,11 +6,14 @@ import java.util.List;
 import java.util.Scanner;
 
 public class BTree {
-    private Node root = null;
     private static final double minFillFactor = 0.5;
     private static final int fanout = 5;
     // In this project, record id is static
     private static final int rid = 0;
+
+    private Node root = null;
+    private int height = 0;
+
 
     private static abstract class Node {
         String[] keys = new String[fanout - 1];
@@ -67,27 +70,41 @@ public class BTree {
             Util.shiftRight(childNodes, start);
         }
 
-        void insert(String key) {
+        void shiftKeyRight(int start) {
+            super.shiftRight(start);
+            Util.shiftRight(keys, start);
+        }
+
+        int insert(String key) {
             // move keys and childNodes to right
             if (keys[0] == null) {
                 keys[0] = key;
-                return;
+                return 0;
             }
             for (int i = 0; i < keys.length; i++) {
                 if (key.compareTo(keys[i]) < 0) {
-                    keys[i + 1] = keys[i];
+                    shiftRight(i);
+                    shiftKeyRight(i);
                     keys[i] = key;
+                    return i;
                 }
             }
+            return 0;
         }
 
         @Override
-        List<String> search(Node node, java.lang.String key1, java.lang.String key2) {
-            for (int i = 0; i < keys.length; i++) {
-                if (key1.compareTo(keys[i]) < 0) {
-                    return search(childNodes[i], key1, key2);
-                } else if (key1.compareTo(keys[i]) == 0 || i == keys.length - 1 || keys[i + 1] == null) {
-                    return search(childNodes[++i], key1, key2);
+        List<String> search(Node node, String key1, String key2) {
+            if (node instanceof LeafNode) {
+                LeafNode ln = (LeafNode) node;
+                return ln.search(node, key1, key2);
+            }
+
+            IndexNode in = (IndexNode) node;
+            for (int i = 0; i < in.keys.length; i++) {
+                if (key1.compareTo(in.keys[i]) < 0) {
+                    return search(in.childNodes[i], key1, key2);
+                } else if (key1.compareTo(in.keys[i]) == 0 || i == in.keys.length - 1 || in.keys[i + 1] == null) {
+                    return search(in.childNodes[++i], key1, key2);
                 }
             }
             return new LinkedList<>();
@@ -146,8 +163,21 @@ public class BTree {
 
         @Override
         List<String> search(Node node, String key1, String key2) {
-            // TODO fix search leaf node logic
-            return null;
+            List<String> result = new LinkedList<>();
+            LeafNode ln = (LeafNode) node;
+            while (ln != null) {
+                for (String k : ln.keys) {
+                    if (k == null) break;
+
+                    if (key2.compareTo(k) < 0)
+                        return result;
+
+                    if (key1.compareTo(k) <= 0 && key2.compareTo(k) >= 0)
+                        result.add(k);
+                }
+                ln = ln.rightLeafNode;
+            }
+            return result;
         }
     }
 
@@ -170,113 +200,104 @@ public class BTree {
         insert(root, key);
     }
 
-    String insert(Node node, String key) {
-
-        /*
-            cases: root and leaf
-                        fill factor < 1 => insert to leaf node, no string return 
-                        fill factor = 1 => split, insert to leaf node, set root = node
-                   root and index
-                        find leaf node to insert
-                        if string is null => return
-                        if string is not null =>
-                             if fill factor < 1 => insert to own keys, adjust child node
-                             if fill factor = 1 => split, insert to own key, set root = node, adjust child node
-
-
-                   non-root and leaf
-                        fill factor < 1 => insert to leaf node, no string return
-                        fill factor = 1 => insert to leaf node, split, and return string to be inserted to parent
-                   non-root and index
-                        find leaf node to insert
-         */
-        if (root == node && node instanceof LeafNode) {
-            // root and leaf
-
-            if (!node.isFull()) {
+    Node insert(Node node, String key) {
+        if (node instanceof LeafNode) {
+            if (node.isFull()) {
+                return splitLeafNode((LeafNode) node, key);
+            } else {
                 ((LeafNode) node).insert(key);
-            } else {
-                LeafNode leftNode = new LeafNode();
-                LeafNode rightNode = new LeafNode();
-
-                int mid = fanout / 2;
-
-                for (int i = 0; i < mid; i++) {
-                    leftNode.keys[i] = node.keys[i];
-                    leftNode.rids[i] = ((LeafNode) node).rids[i];
-                }
-
-                for (int i = mid; i < fanout - 1; i++) {
-                    rightNode.keys[i - mid] = node.keys[i];
-                    rightNode.rids[i - mid] = ((LeafNode) node).rids[i];
-                }
-
-                if (key.compareTo(leftNode.keys[mid - 1]) < 0) {
-                    leftNode.insert(key);
-                    rightNode.insert(leftNode.keys[mid]);
-                    leftNode.keys[mid] = null;
-                } else {
-                    rightNode.insert(key);
-                }
-
-                leftNode.rightLeafNode = rightNode;
-                rightNode.leftLeafNode = leftNode;
-
-                root = new IndexNode();
-                root.keys[0] = rightNode.keys[0];
-                ((IndexNode) root).childNodes[0] = leftNode;
-                ((IndexNode) root).childNodes[1] = rightNode;
                 return null;
-            }
-        } else if (root == node && node instanceof IndexNode) {
-            String stringToInsert = null;
-            boolean isInserted = false;
-            for (int i = 0; i < node.keys.length; i++) {
-                if (key.compareTo(node.keys[i]) < 0) {
-                    stringToInsert = insert(((IndexNode) node).childNodes[i], key);
-                    isInserted = true;
-                    break;
-                }
-            }
-
-            for (int i = 0; i < ((IndexNode) node).childNodes.length; i++) {
-//                if (((IndexNode) node).childNodes[i] == null) {
-//                    ((IndexNode) node).childNodes[i] = ((IndexNode) node).childNodes[i - 1].rightLeafNode;
-//                    break;
-//                }
-            }
-
-            if (!isInserted) {
-                stringToInsert = insert(((IndexNode) node).childNodes[node.keys.length], key);
-            }
-
-            if (stringToInsert != null) {
-                if (node.fillFactor() < 0) {
-                    ((IndexNode) node).insert(stringToInsert);
-                }
-            } else {
-                return null;
-            }
-
-        } else if (node instanceof LeafNode) {
-            if (node.fillFactor() < 1) {
-                ((LeafNode) node).insert(key);
-            } else {
-                // todo
-
-            }
-        } else if (node instanceof IndexNode) {
-            if (node.fillFactor() < 1) {
-                ((IndexNode) node).insert(key);
-            } else {
-                // todo
             }
         }
 
+        IndexNode in = (IndexNode) node;
 
+        Node childNode = null;
+        for (int i = 0; i < in.keys.length; i++) {
+            if (key.compareTo(in.keys[i]) < 0) {
+                childNode = insert(in.childNodes[i], key);
+                break;
+            } else if (key.compareTo(in.keys[i]) >= 0) {
+                childNode = insert(in.childNodes[i+1], key);
+                break;
+            }
+        }
+
+        // check overflow
+
+        if (childNode != null) {
+            // handle overflow
+            if (!node.isFull()) {
+                int index = ((IndexNode) node).insert(childNode.keys[0]);
+                ((IndexNode) node).childNodes[index] = childNode;
+            } else {
+                // if full
+                if (node == root) {
+                    root = new IndexNode();
+                    Node newRightNode = splitIndexNode((IndexNode) node, childNode);
+                    ((IndexNode) root).childNodes[0] = node;
+                    ((IndexNode) root).childNodes[1] = newRightNode;
+                    root.keys[0] = newRightNode.keys[0];
+                    return root;
+                } else {
+                    return splitIndexNode((IndexNode) node, childNode);
+                }
+            }
+        } else {
+            return null;
+        }
         return null;
     }
 
+    Node splitLeafNode(LeafNode fullLeafNode, String key) {
+        LeafNode newLeafNode = new LeafNode();
+        int mid = fanout / 2;
+
+        for (int i = mid; i < fullLeafNode.keys.length; i++) {
+            newLeafNode.keys[i - mid] = fullLeafNode.keys[i];
+            newLeafNode.rids[i - mid] = fullLeafNode.rids[i];
+
+            fullLeafNode.keys[i] = null;
+            fullLeafNode.rids[i] = null;
+        }
+
+        if (key.compareTo(fullLeafNode.keys[mid - 1]) < 0) {
+            fullLeafNode.insert(key);
+            newLeafNode.insert(fullLeafNode.keys[mid]);
+            fullLeafNode.keys[mid] = null;
+        } else {
+            newLeafNode.insert(key);
+        }
+
+        return newLeafNode;
+    }
+
+    Node splitIndexNode(IndexNode fullIndexNode, Node childNode) {
+        IndexNode newIndexNode = new IndexNode();
+        int mid = fanout / 2;
+
+        for (int i = mid; i < fullIndexNode.keys.length; i++) {
+            newIndexNode.keys[i - mid] = fullIndexNode.keys[i];
+            newIndexNode.childNodes[i - mid] = fullIndexNode.childNodes[i];
+
+            fullIndexNode.keys[i] = null;
+            fullIndexNode.childNodes[i] = null;
+        }
+
+        if (childNode.keys[0].compareTo(fullIndexNode.keys[mid - 1]) < 0) {
+            fullIndexNode.insert(childNode.keys[0]);
+            fullIndexNode.childNodes[fullIndexNode.insert(childNode.keys[0])] = childNode;
+            newIndexNode.insert(fullIndexNode.keys[mid]);
+            newIndexNode.childNodes[newIndexNode.insert(fullIndexNode.keys[mid])] = fullIndexNode.childNodes[mid];
+            fullIndexNode.keys[mid] = null;
+            fullIndexNode.childNodes[mid] = null;
+        } else {
+            newIndexNode.insert(childNode.keys[0]);
+            newIndexNode.childNodes[newIndexNode.insert(childNode.keys[0])] = childNode;
+        }
+
+        return newIndexNode;
+    }
 
     private void splitRootNode(Node root) {
         // split and return ?
@@ -405,8 +426,10 @@ public class BTree {
                 }
             }
 
-            if (root.keys[0] == null)
+            if (root.keys[0] == null) {
                 root = in.childNodes[0];
+                height--;
+            }
         }
     }
 
@@ -446,8 +469,16 @@ public class BTree {
         }
     }
 
-    public void printNode() {
-        // TODO
+    public void printNode(Node node) {
+        String[] keys = node.keys;
+        System.out.print("[");
+        for (int i = 0; i < keys.length; i++) {
+            if (keys[i] == null) break;
+            System.out.println(keys[i]);
+            if (i < keys.length - 1 || keys[i + 1] == null)
+                System.out.print(", ");
+        }
+        System.out.print("]");
     }
 
     public static class KeyNotFoundException extends RuntimeException {
@@ -528,7 +559,8 @@ public class BTree {
     }
 
     public static void main(String[] args) {
-        runTest();
+//        runTest();
+        runTest2();
 
         // User Interface
         if (args.length != 1) {
@@ -562,95 +594,117 @@ public class BTree {
             throw new RuntimeException(e);
         }
 
-        bPlusTree.insert("1");
-        bPlusTree.insert("2");
-        bPlusTree.insert("3");
-        bPlusTree.insert("4");
+        LeafNode leafNode1 = new LeafNode();
+        leafNode1.keys[0] = "ab";
+        leafNode1.keys[1] = "abc";
+
+        LeafNode leafNode2 = new LeafNode();
+        leafNode2.keys[0] = "b";
+        leafNode2.keys[1] = "bab";
+        leafNode2.keys[2] = "babc";
+
+        LeafNode leafNode3 = new LeafNode();
+        leafNode3.keys[0] = "c";
+        leafNode3.keys[1] = "ca";
+
+        IndexNode indexNode1 = new IndexNode();
+        indexNode1.keys[0] = "b";
+        indexNode1.keys[1] = "c";
+        indexNode1.childNodes[0] = leafNode1;
+        indexNode1.childNodes[1] = leafNode2;
+        indexNode1.childNodes[2] = leafNode3;
+
+        LeafNode leafNode4 = new LeafNode();
+        leafNode4.keys[0] = "xa";
+        leafNode4.keys[1] = "xb";
+
+        LeafNode leafNode5 = new LeafNode();
+        leafNode5.keys[0] = "ya";
+        leafNode5.keys[1] = "yb";
+        leafNode5.keys[2] = "yc";
+
+        LeafNode leafNode6 = new LeafNode();
+        leafNode6.keys[0] = "za";
+        leafNode6.keys[1] = "zb";
+
+        IndexNode indexNode2 = new IndexNode();
+        indexNode2.keys[0] = "ya";
+        indexNode2.keys[1] = "za";
+        indexNode2.childNodes[0] = leafNode4;
+        indexNode2.childNodes[1] = leafNode5;
+        indexNode2.childNodes[2] = leafNode6;
+
+        leafNode1.rightLeafNode = leafNode2;
+        leafNode2.rightLeafNode = leafNode3;
+        leafNode3.rightLeafNode = leafNode4;
+        leafNode4.rightLeafNode = leafNode5;
+        leafNode5.rightLeafNode = leafNode6;
+
+        bPlusTree.root = new IndexNode();
+        bPlusTree.root.keys[0] = "xa";
+        ((IndexNode) bPlusTree.root).childNodes[0] = indexNode1;
+        ((IndexNode) bPlusTree.root).childNodes[1] = indexNode2;
+        bPlusTree.printTree();
+
+        System.out.println();
+        System.out.println("Search bab - y:");
+        List<String> result = bPlusTree.search("bab", "y");
+        for (String s : result)
+            System.out.print(s + " ");
+        System.out.println();
+
+        System.out.println();
+        System.out.println("Delete bab:");
+        bPlusTree.delete("bab");
+        bPlusTree.printTree();
+
+        System.out.println();
+        System.out.println("Delete b:");
+        bPlusTree.delete("b");
+        bPlusTree.printTree();
+
+        System.out.println();
+        System.out.println("Delete za:");
+        bPlusTree.delete("za");
+        bPlusTree.printTree();
+
+        System.out.println();
+        System.out.println("Delete yc:");
+        bPlusTree.delete("yc");
+        bPlusTree.printTree();
+
+        System.out.println();
+        System.out.println("Delete c:");
+        bPlusTree.delete("c");
+        bPlusTree.printTree();
+
+        System.out.println();
+        System.out.println("Delete xa:");
+        bPlusTree.delete("xa");
+        bPlusTree.printTree();
+
+        System.out.println();
+        System.out.println("Delete yb:");
+        bPlusTree.delete("yb");
+        bPlusTree.printTree();
+    }
+
+    private static void runTest2() {
+        BTree bPlusTree = null;
+        try {
+            bPlusTree = new BTree("123.txt");
+        } catch (FileNotFoundException e) {
+            throw new RuntimeException(e);
+        }
+
+//        bPlusTree.insert("1");
+//        bPlusTree.insert("2");
+//        bPlusTree.insert("3");
+//        bPlusTree.insert("4");
 
         bPlusTree.printTree();
 
         bPlusTree.insert("5");
-
-//        LeafNode leafNode1 = new LeafNode();
-//        leafNode1.keys[0] = "ab";
-//        leafNode1.keys[1] = "abc";
-//
-//        LeafNode leafNode2 = new LeafNode();
-//        leafNode2.keys[0] = "b";
-//        leafNode2.keys[1] = "bab";
-//        leafNode2.keys[2] = "babc";
-//
-//        LeafNode leafNode3 = new LeafNode();
-//        leafNode3.keys[0] = "c";
-//        leafNode3.keys[1] = "ca";
-//
-//        IndexNode indexNode1 = new IndexNode();
-//        indexNode1.keys[0] = "b";
-//        indexNode1.keys[1] = "c";
-//        indexNode1.childNodes[0] = leafNode1;
-//        indexNode1.childNodes[1] = leafNode2;
-//        indexNode1.childNodes[2] = leafNode3;
-//
-//        LeafNode leafNode4 = new LeafNode();
-//        leafNode4.keys[0] = "xa";
-//        leafNode4.keys[1] = "xb";
-//
-//        LeafNode leafNode5 = new LeafNode();
-//        leafNode5.keys[0] = "ya";
-//        leafNode5.keys[1] = "yb";
-//        leafNode5.keys[2] = "yc";
-//
-//        LeafNode leafNode6 = new LeafNode();
-//        leafNode6.keys[0] = "za";
-//        leafNode6.keys[1] = "zb";
-//
-//        IndexNode indexNode2 = new IndexNode();
-//        indexNode2.keys[0] = "ya";
-//        indexNode2.keys[1] = "za";
-//        indexNode2.childNodes[0] = leafNode4;
-//        indexNode2.childNodes[1] = leafNode5;
-//        indexNode2.childNodes[2] = leafNode6;
-//
-//        bPlusTree.root = new IndexNode();
-//        bPlusTree.root.keys[0] = "xa";
-//        ((IndexNode) bPlusTree.root).childNodes[0] = indexNode1;
-//        ((IndexNode) bPlusTree.root).childNodes[1] = indexNode2;
-//        bPlusTree.printTree();
-//
-//        System.out.println();
-//        System.out.println("Delete bab:");
-//        bPlusTree.delete("bab");
-//        bPlusTree.printTree();
-//
-//        System.out.println();
-//        System.out.println("Delete b:");
-//        bPlusTree.delete("b");
-//        bPlusTree.printTree();
-//
-//        System.out.println();
-//        System.out.println("Delete za:");
-//        bPlusTree.delete("za");
-//        bPlusTree.printTree();
-//
-//        System.out.println();
-//        System.out.println("Delete yc:");
-//        bPlusTree.delete("yc");
-//        bPlusTree.printTree();
-//
-//        System.out.println();
-//        System.out.println("Delete c:");
-//        bPlusTree.delete("c");
-//        bPlusTree.printTree();
-//
-//        System.out.println();
-//        System.out.println("Delete xa:");
-//        bPlusTree.delete("xa");
-//        bPlusTree.printTree();
-//
-//        System.out.println();
-//        System.out.println("Delete yb:");
-//        bPlusTree.delete("yb");
-//        bPlusTree.printTree();
     }
 }
 
