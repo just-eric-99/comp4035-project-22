@@ -211,24 +211,23 @@ public class BTree {
             ((LeafNode) root).insert(key);
             return;
         }
-        insert(root, key);
+        root = insert(root, key);
     }
 
-    Node insert(Node node, String key) {
+    private Node insert(Node node, String key) {
         if (node instanceof LeafNode) {
             if (node.isFull()) {
                 if (node == root) {
                     IndexNode newRoot = new IndexNode();
                     Node newLeaf = splitLeafNode((LeafNode) node, key);
 
-                    newRoot.childNodes[0] = ((LeafNode) node);
+                    newRoot.childNodes[0] = node;
                     newRoot.childNodes[1] = newLeaf;
                     newRoot.keys[0] = newLeaf.keys[0];
                     root = newRoot;
 
                     return newRoot;
                 }
-
                 return splitLeafNode((LeafNode) node, key);
             } else {
                 ((LeafNode) node).insert(key);
@@ -239,45 +238,43 @@ public class BTree {
         IndexNode in = (IndexNode) node;
 
         Node childNode = null;
-        int i = 0;
-        for (; i < in.keys.length; i++) {
-            if (key.compareTo(in.keys[i]) < 0) {
-                childNode = insert(in.childNodes[i], key);
+        int nodePos = 0, childPos;
+        for (; nodePos < in.keys.length; nodePos++) {
+            if (key.compareTo(in.keys[nodePos]) < 0) {
+                childNode = insert(in.childNodes[nodePos], key);
+                childPos = nodePos;
                 break;
-            } else if (key.compareTo(in.keys[i]) == 0 || i == in.keys.length - 1 || in.keys[i + 1] == null) {
-                childNode = insert(in.childNodes[i + 1], key);
+            } else if (key.compareTo(in.keys[nodePos]) == 0 || nodePos == in.keys.length - 1 || in.keys[nodePos + 1] == null) {
+                childPos = nodePos + 1;
+                childNode = insert(in.childNodes[childPos], key);
                 break;
             }
         }
 
         // check overflow
+        if (childNode == null)
+            return null;
 
-        if (childNode != null) {
-            // handle overflow
-            if (!node.isFull()) {
-                int index = ((IndexNode) node).insert(childNode.keys[0]);
-                ((IndexNode) node).childNodes[index + 1] = childNode;
-
-            } else {
-                // if full
-                if (node == root) {
-                    root = new IndexNode();
-                    Node newRightNode = splitIndexNode((IndexNode) node, childNode);
-                    ((IndexNode) root).childNodes[0] = node;
-                    ((IndexNode) root).childNodes[1] = newRightNode;
-                    root.keys[0] = newRightNode.keys[0];
-                    return root;
-                } else {
-                    return splitIndexNode((IndexNode) node, childNode);
-                }
-            }
-        } else {
+        // handle overflow
+        if (!node.isFull()) {
+            int index = ((IndexNode) node).insert(childNode.keys[0]);
+            ((IndexNode) node).childNodes[index + 1] = childNode;
             return null;
         }
-        return null;
+
+        if (node == root) {
+            root = new IndexNode();
+            Node newRightNode = splitIndexNode((IndexNode) node, childNode); // **
+            ((IndexNode) root).childNodes[0] = node;
+            ((IndexNode) root).childNodes[1] = newRightNode;
+            root.keys[0] = newRightNode.keys[0];
+            return root;
+        } else {
+            return splitIndexNode((IndexNode) node, childNode); // **
+        }
     }
 
-    Node splitLeafNode(LeafNode fullLeafNode, String key) {
+    LeafNode splitLeafNode(LeafNode fullLeafNode, String key) {
         LeafNode newLeafNode = new LeafNode();
         int mid = fanout / 2;
 
@@ -305,7 +302,6 @@ public class BTree {
     }
 
     Node splitIndexNode(IndexNode fullIndexNode, Node childNode) {
-        System.out.println("inside splitIndexNode");
         IndexNode newIndexNode = new IndexNode();
         int mid = fanout / 2;
 
@@ -469,14 +465,6 @@ public class BTree {
     public List<String> search(String key1, String key2) {
         return root.search(root, key1, key2);
     }
-
-//    private Node findParent(Node node) {
-//
-//    }
-
-//    private Node find(String key, Node node) {
-//
-//    }
 
     public void dumpStatistics() {
         // TODO
@@ -749,19 +737,3 @@ public class BTree {
 
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
