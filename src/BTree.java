@@ -70,7 +70,7 @@ public class BTree {
             Util.shiftRight(childNodes, start);
         }
 
-        void shiftKeyRight(int start) {
+        void shiftRightKey(int start) {
             super.shiftRight(start);
             Util.shiftRight(keys, start);
         }
@@ -84,18 +84,19 @@ public class BTree {
 
             int i = 0;
 
+            // 1 2 5 6 <-
             while (i < keys.length) {
-                if (key.compareTo(keys[i]) < 0) {
-                    shiftRight(i);
-                    shiftKeyRight(i);
+                if (keys[i] == null) {
                     keys[i] = key;
                     return i;
-                } else if (key.compareTo(keys[i]) >= 0) {
-                    keys[i + 1] = key;
-                    return i + 1;
-                } else {
-                    i++;
                 }
+                if (key.compareTo(keys[i]) < 0) {
+                    Util.shiftRight(keys, i);
+                    Util.shiftRight(childNodes, i + 1);
+                    keys[i] = key;
+                    return i;
+                }
+                i++;
             }
             return 0;
         }
@@ -238,8 +239,8 @@ public class BTree {
         IndexNode in = (IndexNode) node;
 
         Node childNode = null;
-        int pos = 0;
-        for (int i = 0; i < in.keys.length; i++) {
+        int i = 0;
+        for (; i < in.keys.length; i++) {
             if (key.compareTo(in.keys[i]) < 0) {
                 childNode = insert(in.childNodes[i], key);
                 break;
@@ -304,6 +305,7 @@ public class BTree {
     }
 
     Node splitIndexNode(IndexNode fullIndexNode, Node childNode) {
+        System.out.println("inside splitIndexNode");
         IndexNode newIndexNode = new IndexNode();
         int mid = fanout / 2;
 
