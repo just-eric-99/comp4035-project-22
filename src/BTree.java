@@ -81,12 +81,20 @@ public class BTree {
                 keys[0] = key;
                 return 0;
             }
-            for (int i = 0; i < keys.length; i++) {
+
+            int i = 0;
+
+            while (i < keys.length) {
                 if (key.compareTo(keys[i]) < 0) {
                     shiftRight(i);
                     shiftKeyRight(i);
                     keys[i] = key;
                     return i;
+                } else if (key.compareTo(keys[i]) >= 0) {
+                    keys[i + 1] = key;
+                    return i + 1;
+                } else {
+                    i++;
                 }
             }
             return 0;
@@ -185,11 +193,16 @@ public class BTree {
         System.out.println("Building an initial B+-tree... Launching the B+-tree test program...");
         File f = new File(filename);
         Scanner s = new Scanner(f);
+        int i = 0;
         while (s.hasNextLine()) {
+            System.out.println("round: " + (++i));
+            if (i == 16) break;
             insert(s.nextLine());
         }
         s.close();
     }
+
+    public BTree() {}
 
     void insert(String key) {
         if (root == null) {
@@ -203,6 +216,18 @@ public class BTree {
     Node insert(Node node, String key) {
         if (node instanceof LeafNode) {
             if (node.isFull()) {
+                if (node == root) {
+                    IndexNode newRoot = new IndexNode();
+                    Node newLeaf = splitLeafNode((LeafNode) node, key);
+
+                    newRoot.childNodes[0] = ((LeafNode) node);
+                    newRoot.childNodes[1] = newLeaf;
+                    newRoot.keys[0] = newLeaf.keys[0];
+                    root = newRoot;
+
+                    return newRoot;
+                }
+
                 return splitLeafNode((LeafNode) node, key);
             } else {
                 ((LeafNode) node).insert(key);
@@ -213,12 +238,13 @@ public class BTree {
         IndexNode in = (IndexNode) node;
 
         Node childNode = null;
+        int pos = 0;
         for (int i = 0; i < in.keys.length; i++) {
             if (key.compareTo(in.keys[i]) < 0) {
                 childNode = insert(in.childNodes[i], key);
                 break;
-            } else if (key.compareTo(in.keys[i]) >= 0) {
-                childNode = insert(in.childNodes[i+1], key);
+            } else if (key.compareTo(in.keys[i]) == 0 || i == in.keys.length - 1 || in.keys[i + 1] == null) {
+                childNode = insert(in.childNodes[i + 1], key);
                 break;
             }
         }
@@ -229,7 +255,8 @@ public class BTree {
             // handle overflow
             if (!node.isFull()) {
                 int index = ((IndexNode) node).insert(childNode.keys[0]);
-                ((IndexNode) node).childNodes[index] = childNode;
+                ((IndexNode) node).childNodes[index + 1] = childNode;
+
             } else {
                 // if full
                 if (node == root) {
@@ -253,6 +280,7 @@ public class BTree {
         LeafNode newLeafNode = new LeafNode();
         int mid = fanout / 2;
 
+        // 2, 3 -> 0, 1
         for (int i = mid; i < fullLeafNode.keys.length; i++) {
             newLeafNode.keys[i - mid] = fullLeafNode.keys[i];
             newLeafNode.rids[i - mid] = fullLeafNode.rids[i];
@@ -268,6 +296,9 @@ public class BTree {
         } else {
             newLeafNode.insert(key);
         }
+
+        fullLeafNode.rightLeafNode = newLeafNode;
+        newLeafNode.leftLeafNode = fullLeafNode;
 
         return newLeafNode;
     }
@@ -561,7 +592,7 @@ public class BTree {
     public static void main(String[] args) {
 //        runTest();
         runTest2();
-
+        System.out.println("finished");
         // User Interface
         if (args.length != 1) {
             System.out.println("Invalid number of arguments.");
@@ -690,21 +721,30 @@ public class BTree {
     }
 
     private static void runTest2() {
-        BTree bPlusTree = null;
-        try {
-            bPlusTree = new BTree("123.txt");
-        } catch (FileNotFoundException e) {
-            throw new RuntimeException(e);
-        }
+        BTree bPlusTree = new BTree();
 
-//        bPlusTree.insert("1");
-//        bPlusTree.insert("2");
-//        bPlusTree.insert("3");
-//        bPlusTree.insert("4");
+        bPlusTree.insert("ac");
+        bPlusTree.insert("qk");
+        bPlusTree.insert("jj");
+        bPlusTree.insert("ip");
+        bPlusTree.insert("yl");
+        bPlusTree.insert("pc");
+        bPlusTree.insert("qn");
+        bPlusTree.insert("ls");
+        bPlusTree.insert("qo");
+        bPlusTree.insert("xw");
+        bPlusTree.insert("jf");
+        bPlusTree.insert("qt");
+        bPlusTree.insert("pz");
+        bPlusTree.insert("ft");
+        bPlusTree.insert("ck");
+        bPlusTree.insert("ch");
+        bPlusTree.insert("nt");
+        bPlusTree.insert("tg");
+        bPlusTree.insert("ok");
+        bPlusTree.insert("hv");
 
-        bPlusTree.printTree();
 
-        bPlusTree.insert("5");
     }
 }
 
