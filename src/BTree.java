@@ -1,9 +1,6 @@
 import java.io.File;
 import java.io.FileNotFoundException;
-import java.util.Arrays;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Scanner;
+import java.util.*;
 
 public class BTree {
     private static final double minFillFactor = 0.5;
@@ -12,12 +9,16 @@ public class BTree {
     private static final int rid = 0;
 
     private Node root = null;
-    private int height = 0;
 
+    private int totalNode = 0;
+    private int height = 0;
+    private int dataEntries = 0;
+    private int indexEntries = 0;
 
     private static abstract class Node {
         String[] keys = new String[fanout - 1];
 
+        // fillFactor * (fanout - 1)
         double fillFactor() {
             int count = 0;
             for (String k : keys) {
@@ -166,6 +167,8 @@ public class BTree {
                     shiftRight(i);
                     keys[i] = key;
                     return;
+                } else if (key.compareTo(keys[i]) == 0) {
+                    throw new DuplicateKeyException(key);
                 }
             }
         }
@@ -190,6 +193,16 @@ public class BTree {
         }
     }
 
+    private static class OverflowData {
+        String key;
+        Node node;
+
+        OverflowData(String key, Node node) {
+            this.key = key;
+            this.node = node;
+        }
+    }
+
     public BTree(String filename) throws FileNotFoundException {
         System.out.println("Building an initial B+-tree... Launching the B+-tree test program...");
         File f = new File(filename);
@@ -208,27 +221,31 @@ public class BTree {
     void insert(String key) {
         if (root == null) {
             root = new LeafNode();
+            totalNode++;
             ((LeafNode) root).insert(key);
             return;
         }
-        root = insert(root, key);
+        insert(root, key);
+        dataEntries++;
     }
 
-    private Node insert(Node node, String key) {
+    private OverflowData insert(Node node, String key) {
         if (node instanceof LeafNode) {
             if (node.isFull()) {
                 if (node == root) {
                     IndexNode newRoot = new IndexNode();
+                    totalNode++;
                     Node newLeaf = splitLeafNode((LeafNode) node, key);
 
                     newRoot.childNodes[0] = node;
                     newRoot.childNodes[1] = newLeaf;
                     newRoot.keys[0] = newLeaf.keys[0];
                     root = newRoot;
-
-                    return newRoot;
+                    height++;
+                    return null;
                 }
-                return splitLeafNode((LeafNode) node, key);
+                LeafNode right = splitLeafNode((LeafNode) node, key);
+                return new OverflowData(right.keys[0], right);
             } else {
                 ((LeafNode) node).insert(key);
                 return null;
@@ -237,45 +254,47 @@ public class BTree {
 
         IndexNode in = (IndexNode) node;
 
-        Node childNode = null;
-        int nodePos = 0, childPos;
-        for (; nodePos < in.keys.length; nodePos++) {
-            if (key.compareTo(in.keys[nodePos]) < 0) {
-                childNode = insert(in.childNodes[nodePos], key);
-                childPos = nodePos;
+        OverflowData overflow = null;
+        int i = 0;
+        for (; i < in.keys.length; i++) {
+            if (key.compareTo(in.keys[i]) < 0) {
+                overflow = insert(in.childNodes[i], key);
                 break;
-            } else if (key.compareTo(in.keys[nodePos]) == 0 || nodePos == in.keys.length - 1 || in.keys[nodePos + 1] == null) {
-                childPos = nodePos + 1;
-                childNode = insert(in.childNodes[childPos], key);
+            } else if (key.compareTo(in.keys[i]) == 0 || i == in.keys.length - 1 || in.keys[i + 1] == null) {
+                overflow = insert(in.childNodes[++i], key);
                 break;
             }
         }
 
         // check overflow
-        if (childNode == null)
+        if (overflow == null)
             return null;
 
         // handle overflow
         if (!node.isFull()) {
-            int index = ((IndexNode) node).insert(childNode.keys[0]);
-            ((IndexNode) node).childNodes[index + 1] = childNode;
+            int index = ((IndexNode) node).insert(overflow.key);
+            ((IndexNode) node).childNodes[index + 1] = overflow.node;
             return null;
         }
 
         if (node == root) {
             root = new IndexNode();
-            Node newRightNode = splitIndexNode((IndexNode) node, childNode); // **
+            totalNode++;
+            OverflowData data = splitIndexNode((IndexNode) node, overflow, i); // **
             ((IndexNode) root).childNodes[0] = node;
-            ((IndexNode) root).childNodes[1] = newRightNode;
-            root.keys[0] = newRightNode.keys[0];
-            return root;
+            ((IndexNode) root).childNodes[1] = data.node;
+            root.keys[0] = data.key;
+            height++;
+            return null;
         } else {
-            return splitIndexNode((IndexNode) node, childNode); // **
+            return splitIndexNode((IndexNode) node, overflow, i); // **
         }
     }
 
     LeafNode splitLeafNode(LeafNode fullLeafNode, String key) {
         LeafNode newLeafNode = new LeafNode();
+        totalNode++;
+        indexEntries++;
         int mid = fanout / 2;
 
         // 2, 3 -> 0, 1
@@ -301,43 +320,36 @@ public class BTree {
         return newLeafNode;
     }
 
-    Node splitIndexNode(IndexNode fullIndexNode, Node childNode) {
-        IndexNode newIndexNode = new IndexNode();
+    OverflowData splitIndexNode(IndexNode node, OverflowData overflow, int childPos) {
+        IndexNode right = new IndexNode();
+        totalNode++;
         int mid = fanout / 2;
+        OverflowData last = new OverflowData(node.keys[node.keys.length - 1], node.childNodes[node.childNodes.length - 1]);
 
-        for (int i = mid; i < fullIndexNode.keys.length; i++) {
-            newIndexNode.keys[i - mid] = fullIndexNode.keys[i];
-            newIndexNode.childNodes[i - mid] = fullIndexNode.childNodes[i];
+        Util.shiftRight(node.keys, childPos);
+        Util.shiftRight(node.childNodes, childPos + 1);
+        node.keys[childPos] = overflow.key;
+        node.childNodes[childPos + 1] = overflow.node;
 
-            fullIndexNode.keys[i] = null;
-            fullIndexNode.childNodes[i] = null;
+        OverflowData data = new OverflowData(node.keys[mid], right);
+        right.childNodes[0] = node.childNodes[mid + 1];
+
+        Util.shiftLeft(node.keys, mid);
+        Util.shiftLeft(node.childNodes, mid + 1);
+        node.keys[node.keys.length - 1] = last.key;
+        node.childNodes[node.childNodes.length - 1] = last.node;
+
+        for (int i = mid; i < node.keys.length; i++) {
+            right.keys[i - mid] = node.keys[i];
+            node.keys[i] = null;
         }
 
-        if (childNode.keys[0].compareTo(fullIndexNode.keys[mid - 1]) < 0) {
-            fullIndexNode.insert(childNode.keys[0]);
-            fullIndexNode.childNodes[fullIndexNode.insert(childNode.keys[0])] = childNode;
-            newIndexNode.insert(fullIndexNode.keys[mid]);
-            newIndexNode.childNodes[newIndexNode.insert(fullIndexNode.keys[mid])] = fullIndexNode.childNodes[mid];
-            fullIndexNode.keys[mid] = null;
-            fullIndexNode.childNodes[mid] = null;
-        } else {
-            newIndexNode.insert(childNode.keys[0]);
-            newIndexNode.childNodes[newIndexNode.insert(childNode.keys[0])] = childNode;
+        for (int i = mid + 1; i < node.childNodes.length; i++) {
+            right.childNodes[i - mid] = node.childNodes[i];
+            node.childNodes[i] = null;
         }
 
-        return newIndexNode;
-    }
-
-    private void splitRootNode(Node root) {
-        // split and return ?
-    }
-
-    private void splitInternalNode() {
-
-    }
-
-    private void splitLeafNode() {
-
+        return data;
     }
 
     public void delete(String key) {
@@ -425,19 +437,15 @@ public class BTree {
             // Merge
             if (currentNode instanceof LeafNode) {
                 if (leftSibling == null) {
-                    Util.mergeArray(currentNode.keys, rightSibling.keys);
-                    Util.mergeArray(((LeafNode) currentNode).rids, ((LeafNode) rightSibling).rids);
-                    ((LeafNode) currentNode).rightLeafNode = ((LeafNode) rightSibling).rightLeafNode;
+                    mergeLeafNode(currentNode, rightSibling);
                     Util.shiftLeft(in.childNodes, i + 1);
                     Util.shiftLeft(in.keys, i);
                 } else {
-                    Util.mergeArray(leftSibling.keys, currentNode.keys);
-                    Util.mergeArray(((LeafNode) leftSibling).rids, ((LeafNode) currentNode).rids);
-                    ((LeafNode) leftSibling).rightLeafNode = ((LeafNode) currentNode).rightLeafNode;
+                    mergeLeafNode(leftSibling, currentNode);
                     Util.shiftLeft(in.childNodes, i);
                     Util.shiftLeft(in.keys, i - 1);
                 }
-
+                indexEntries--;
             } else if (currentNode instanceof IndexNode) {
                 if (rightSibling == null) {
                     in.shiftRight();
@@ -454,11 +462,22 @@ public class BTree {
                     Util.shiftLeft(in.keys, i);
                 }
             }
+            totalNode--;
 
             if (root.keys[0] == null) {
                 root = in.childNodes[0];
+                totalNode--;
                 height--;
             }
+        }
+    }
+
+    private void mergeLeafNode(Node left, Node right) {
+        Util.mergeArray(left.keys, right.keys);
+        Util.mergeArray(((LeafNode) left).rids, ((LeafNode) right).rids);
+        ((LeafNode) left).rightLeafNode = ((LeafNode) right).rightLeafNode;
+        if (((LeafNode) right).rightLeafNode.rightLeafNode != null) {
+            ((LeafNode) right).rightLeafNode.rightLeafNode.leftLeafNode = (LeafNode) left;
         }
     }
 
@@ -467,7 +486,12 @@ public class BTree {
     }
 
     public void dumpStatistics() {
-        // TODO
+        System.out.println("Statistics of the B+ Tree:");
+        System.out.println("Total number of nodes: " + totalNode);
+        System.out.println("Total number of data entries: " + dataEntries);
+        System.out.println("Total number of index entries: " + indexEntries);
+        System.out.println("Average fill factor: " + (dataEntries + indexEntries) / (totalNode * (fanout - 1)));
+        System.out.println("Height of tree: " + height);
     }
 
     public void printTree() {
@@ -476,16 +500,20 @@ public class BTree {
 
     public void printTree(Node n) {
         // TODO
+
+        System.out.print("[");
         for (int i = 0; i < n.keys.length; i++) {
             if (n.keys[i] != null)
                 System.out.print(n.keys[i] + " ");
         }
-        System.out.println();
+        System.out.print("]");
 
         if (n instanceof IndexNode) {
             for (Node node : ((IndexNode) n).childNodes) {
-                if (node != null)
+                if (node != null) {
                     printTree(node);
+                    System.out.println();
+                }
             }
         }
     }
@@ -505,6 +533,12 @@ public class BTree {
     public static class KeyNotFoundException extends RuntimeException {
         public KeyNotFoundException(String key) {
             super("The key " + key + " is not in the B+-tree.");
+        }
+    }
+
+    public static class DuplicateKeyException extends RuntimeException {
+        public DuplicateKeyException(String key) {
+            super("The key " + key + " has been inserted in the B+-tree!");
         }
     }
 
@@ -532,6 +566,7 @@ public class BTree {
                     statsCommand(tokens, bTree);
                     break;
                 case "quit":
+                    System.out.println("The program is terminated.");
                     return;
                 default:
                     System.out.println("Invalid input.");
@@ -734,6 +769,6 @@ public class BTree {
         bPlusTree.insert("ok");
         bPlusTree.insert("hv");
 
-
+        bPlusTree.printTree();
     }
 }

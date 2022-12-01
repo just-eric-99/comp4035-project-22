@@ -8,7 +8,7 @@ public class Util {
             if (array[i] == null) break;
 
             if (i == array.length - 1) {
-                array[start] = null;
+                array[i] = null;
                 break;
             }
 
@@ -44,7 +44,7 @@ public class Util {
 
     public static void main(String[] args) {
         Integer[] a = {1, 2, 3, 4};
-        shiftRight(a, 1);
+        shiftLeft(a, 0);
         for (Integer i : a) {
             System.out.print(i + " ");
         }
