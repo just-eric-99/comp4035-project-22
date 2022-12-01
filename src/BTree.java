@@ -21,7 +21,12 @@ public class BTree {
                 if (k == null) break;
                 count++;
             }
+            System.out.println("current fillFactor: " + ((double) count / keys.length));
             return (double) count / keys.length;
+        }
+
+        boolean isFull() {
+            return keys[keys.length - 1] != null;
         }
 
         void sort() {
@@ -63,6 +68,7 @@ public class BTree {
         }
 
         void insert(String key) {
+            // move keys and childNodes to right
             if (keys[0] == null) {
                 keys[0] = key;
                 return;
@@ -127,9 +133,13 @@ public class BTree {
                 return;
             }
             for (int i = 0; i < keys.length; i++) {
-                if (key.compareTo(keys[i]) < 0) {
-                    keys[i + 1] = keys[i];
+                if (keys[i] == null) {
                     keys[i] = key;
+                    return;
+                } else if (key.compareTo(keys[i]) < 0) {
+                    shiftRight(i);
+                    keys[i] = key;
+                    return;
                 }
             }
         }
@@ -151,22 +161,39 @@ public class BTree {
         s.close();
     }
 
-//    private void insertLeadNode(Record record) {
-//
-//    }
-//
-//    private void insertInternalNode (Record record) {
-//
-//    }
-
     void insert(String key) {
+        if (root == null) {
+            root = new LeafNode();
+            ((LeafNode) root).insert(key);
+            return;
+        }
         insert(root, key);
     }
 
     String insert(Node node, String key) {
 
+        /*
+            cases: root and leaf
+                        fill factor < 1 => insert to leaf node, no string return 
+                        fill factor = 1 => split, insert to leaf node, set root = node
+                   root and index
+                        find leaf node to insert
+                        if string is null => return
+                        if string is not null =>
+                             if fill factor < 1 => insert to own keys, adjust child node
+                             if fill factor = 1 => split, insert to own key, set root = node, adjust child node
+
+
+                   non-root and leaf
+                        fill factor < 1 => insert to leaf node, no string return
+                        fill factor = 1 => insert to leaf node, split, and return string to be inserted to parent
+                   non-root and index
+                        find leaf node to insert
+         */
         if (root == node && node instanceof LeafNode) {
-            if (node.fillFactor() < 1) {
+            // root and leaf
+
+            if (!node.isFull()) {
                 ((LeafNode) node).insert(key);
             } else {
                 LeafNode leftNode = new LeafNode();
@@ -179,14 +206,13 @@ public class BTree {
                     leftNode.rids[i] = ((LeafNode) node).rids[i];
                 }
 
-                for (int i = mid; i < fanout; i++) {
+                for (int i = mid; i < fanout - 1; i++) {
                     rightNode.keys[i - mid] = node.keys[i];
                     rightNode.rids[i - mid] = ((LeafNode) node).rids[i];
                 }
 
                 if (key.compareTo(leftNode.keys[mid - 1]) < 0) {
                     leftNode.insert(key);
-                    // achieve consistency 2 on the left, 3 on the right
                     rightNode.insert(leftNode.keys[mid]);
                     leftNode.keys[mid] = null;
                 } else {
@@ -200,26 +226,38 @@ public class BTree {
                 root.keys[0] = rightNode.keys[0];
                 ((IndexNode) root).childNodes[0] = leftNode;
                 ((IndexNode) root).childNodes[1] = rightNode;
-//                return;
+                return null;
             }
         } else if (root == node && node instanceof IndexNode) {
-            if (node.fillFactor() < 1) {
-                boolean isInserted = false;
-                for (int i = 0; i < node.keys.length; i++) {
-                    if (key.compareTo(node.keys[i]) < 0) {
-                        insert(((IndexNode) node).childNodes[i], key);
-                        isInserted = true;
-                        break;
-                    }
+            String stringToInsert = null;
+            boolean isInserted = false;
+            for (int i = 0; i < node.keys.length; i++) {
+                if (key.compareTo(node.keys[i]) < 0) {
+                    stringToInsert = insert(((IndexNode) node).childNodes[i], key);
+                    isInserted = true;
+                    break;
                 }
-                if (!isInserted) {
-                    insert(((IndexNode) node).childNodes[node.keys.length], key);
-                }
-
-            } else {
-                // todo
-
             }
+
+            for (int i = 0; i < ((IndexNode) node).childNodes.length; i++) {
+//                if (((IndexNode) node).childNodes[i] == null) {
+//                    ((IndexNode) node).childNodes[i] = ((IndexNode) node).childNodes[i - 1].rightLeafNode;
+//                    break;
+//                }
+            }
+
+            if (!isInserted) {
+                stringToInsert = insert(((IndexNode) node).childNodes[node.keys.length], key);
+            }
+
+            if (stringToInsert != null) {
+                if (node.fillFactor() < 0) {
+                    ((IndexNode) node).insert(stringToInsert);
+                }
+            } else {
+                return null;
+            }
+
         } else if (node instanceof LeafNode) {
             if (node.fillFactor() < 1) {
                 ((LeafNode) node).insert(key);
@@ -524,85 +562,110 @@ public class BTree {
             throw new RuntimeException(e);
         }
 
-        LeafNode leafNode1 = new LeafNode();
-        leafNode1.keys[0] = "ab";
-        leafNode1.keys[1] = "abc";
+        bPlusTree.insert("1");
+        bPlusTree.insert("2");
+        bPlusTree.insert("3");
+        bPlusTree.insert("4");
 
-        LeafNode leafNode2 = new LeafNode();
-        leafNode2.keys[0] = "b";
-        leafNode2.keys[1] = "bab";
-        leafNode2.keys[2] = "babc";
-
-        LeafNode leafNode3 = new LeafNode();
-        leafNode3.keys[0] = "c";
-        leafNode3.keys[1] = "ca";
-
-        IndexNode indexNode1 = new IndexNode();
-        indexNode1.keys[0] = "b";
-        indexNode1.keys[1] = "c";
-        indexNode1.childNodes[0] = leafNode1;
-        indexNode1.childNodes[1] = leafNode2;
-        indexNode1.childNodes[2] = leafNode3;
-
-        LeafNode leafNode4 = new LeafNode();
-        leafNode4.keys[0] = "xa";
-        leafNode4.keys[1] = "xb";
-
-        LeafNode leafNode5 = new LeafNode();
-        leafNode5.keys[0] = "ya";
-        leafNode5.keys[1] = "yb";
-        leafNode5.keys[2] = "yc";
-
-        LeafNode leafNode6 = new LeafNode();
-        leafNode6.keys[0] = "za";
-        leafNode6.keys[1] = "zb";
-
-        IndexNode indexNode2 = new IndexNode();
-        indexNode2.keys[0] = "ya";
-        indexNode2.keys[1] = "za";
-        indexNode2.childNodes[0] = leafNode4;
-        indexNode2.childNodes[1] = leafNode5;
-        indexNode2.childNodes[2] = leafNode6;
-
-        bPlusTree.root = new IndexNode();
-        bPlusTree.root.keys[0] = "xa";
-        ((IndexNode) bPlusTree.root).childNodes[0] = indexNode1;
-        ((IndexNode) bPlusTree.root).childNodes[1] = indexNode2;
         bPlusTree.printTree();
 
-        System.out.println();
-        System.out.println("Delete bab:");
-        bPlusTree.delete("bab");
-        bPlusTree.printTree();
+        bPlusTree.insert("5");
 
-        System.out.println();
-        System.out.println("Delete b:");
-        bPlusTree.delete("b");
-        bPlusTree.printTree();
-
-        System.out.println();
-        System.out.println("Delete za:");
-        bPlusTree.delete("za");
-        bPlusTree.printTree();
-
-        System.out.println();
-        System.out.println("Delete yc:");
-        bPlusTree.delete("yc");
-        bPlusTree.printTree();
-
-        System.out.println();
-        System.out.println("Delete c:");
-        bPlusTree.delete("c");
-        bPlusTree.printTree();
-
-        System.out.println();
-        System.out.println("Delete xa:");
-        bPlusTree.delete("xa");
-        bPlusTree.printTree();
-
-        System.out.println();
-        System.out.println("Delete yb:");
-        bPlusTree.delete("yb");
-        bPlusTree.printTree();
+//        LeafNode leafNode1 = new LeafNode();
+//        leafNode1.keys[0] = "ab";
+//        leafNode1.keys[1] = "abc";
+//
+//        LeafNode leafNode2 = new LeafNode();
+//        leafNode2.keys[0] = "b";
+//        leafNode2.keys[1] = "bab";
+//        leafNode2.keys[2] = "babc";
+//
+//        LeafNode leafNode3 = new LeafNode();
+//        leafNode3.keys[0] = "c";
+//        leafNode3.keys[1] = "ca";
+//
+//        IndexNode indexNode1 = new IndexNode();
+//        indexNode1.keys[0] = "b";
+//        indexNode1.keys[1] = "c";
+//        indexNode1.childNodes[0] = leafNode1;
+//        indexNode1.childNodes[1] = leafNode2;
+//        indexNode1.childNodes[2] = leafNode3;
+//
+//        LeafNode leafNode4 = new LeafNode();
+//        leafNode4.keys[0] = "xa";
+//        leafNode4.keys[1] = "xb";
+//
+//        LeafNode leafNode5 = new LeafNode();
+//        leafNode5.keys[0] = "ya";
+//        leafNode5.keys[1] = "yb";
+//        leafNode5.keys[2] = "yc";
+//
+//        LeafNode leafNode6 = new LeafNode();
+//        leafNode6.keys[0] = "za";
+//        leafNode6.keys[1] = "zb";
+//
+//        IndexNode indexNode2 = new IndexNode();
+//        indexNode2.keys[0] = "ya";
+//        indexNode2.keys[1] = "za";
+//        indexNode2.childNodes[0] = leafNode4;
+//        indexNode2.childNodes[1] = leafNode5;
+//        indexNode2.childNodes[2] = leafNode6;
+//
+//        bPlusTree.root = new IndexNode();
+//        bPlusTree.root.keys[0] = "xa";
+//        ((IndexNode) bPlusTree.root).childNodes[0] = indexNode1;
+//        ((IndexNode) bPlusTree.root).childNodes[1] = indexNode2;
+//        bPlusTree.printTree();
+//
+//        System.out.println();
+//        System.out.println("Delete bab:");
+//        bPlusTree.delete("bab");
+//        bPlusTree.printTree();
+//
+//        System.out.println();
+//        System.out.println("Delete b:");
+//        bPlusTree.delete("b");
+//        bPlusTree.printTree();
+//
+//        System.out.println();
+//        System.out.println("Delete za:");
+//        bPlusTree.delete("za");
+//        bPlusTree.printTree();
+//
+//        System.out.println();
+//        System.out.println("Delete yc:");
+//        bPlusTree.delete("yc");
+//        bPlusTree.printTree();
+//
+//        System.out.println();
+//        System.out.println("Delete c:");
+//        bPlusTree.delete("c");
+//        bPlusTree.printTree();
+//
+//        System.out.println();
+//        System.out.println("Delete xa:");
+//        bPlusTree.delete("xa");
+//        bPlusTree.printTree();
+//
+//        System.out.println();
+//        System.out.println("Delete yb:");
+//        bPlusTree.delete("yb");
+//        bPlusTree.printTree();
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
