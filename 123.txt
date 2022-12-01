@@ -1,0 +1,10 @@
+crab
+shrimp
+fish
+coffee
+tea
+water
+lemon
+orange
+apple
+watermelon
