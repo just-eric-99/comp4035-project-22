@@ -41,14 +41,4 @@ public class Util {
             array1[i] = array2[j++];
         }
     }
-
-    public static void main(String[] args) {
-        Integer[] a = {1, 2, 3, 4};
-        shiftLeft(a, 0);
-        for (Integer i : a) {
-            System.out.print(i + " ");
-        }
-
-        System.out.println("bab".compareTo("xa"));
-    }
 }

@@ -15,9 +15,13 @@ public class BTree {
     private int indexEntries = 0;
 
     private static abstract class Node {
+        // initialize keys
         String[] keys = new String[NODE_FANOUT - 1];
 
-        // fillFactor * (fanout - 1)
+        /**
+         * Fill factor of the node
+         * @return Fill factor
+         */
         double fillFactor() {
             int count = 0;
             for (String k : keys) {
@@ -27,26 +31,51 @@ public class BTree {
             return (double) count / keys.length;
         }
 
+        /**
+         * Check node is full or not
+         * @return true if full, else false
+         */
         boolean isFull() {
             return keys[keys.length - 1] != null;
         }
 
+        /**
+         * Shift all element to left
+         */
         void shiftLeft() {
             shiftLeft(0);
         }
 
+        /**
+         * Shift all element to left
+         * @param start position start to shift
+         */
         void shiftLeft(int start) {
             Util.shiftLeft(keys, start);
         }
 
+        /**
+         * Shift all element to right
+         */
         void shiftRight() {
             shiftRight(0);
         }
 
+        /**
+         * Shift all element to right
+         * @param start position start to shift
+         */
         void shiftRight(int start) {
             Util.shiftRight(keys, start);
         }
 
+        /**
+         * Search key in a range
+         * @param node subtree
+         * @param key1 search key 1
+         * @param key2 search key 2
+         * @return List of keys
+         */
         abstract List<String> search(Node node, String key1, String key2);
 
         @Override
@@ -63,23 +92,31 @@ public class BTree {
     private static class IndexNode extends Node {
         Node[] childNodes = new Node[NODE_FANOUT];
 
+        /**
+         * Shift keys and childNode from index = start to the left
+         * @param start position start to shift
+         */
         @Override
         void shiftLeft(int start) {
             super.shiftLeft(start);
             Util.shiftLeft(childNodes, start);
         }
 
+        /**
+         * Shift all element to right
+         * @param start position start to shift
+         */
         @Override
         void shiftRight(int start) {
             super.shiftRight(start);
             Util.shiftRight(childNodes, start);
         }
 
-        void shiftRightKey(int start) {
-            super.shiftRight(start);
-            Util.shiftRight(keys, start);
-        }
-
+        /**
+         * Insert key to node
+         * @param key
+         * @return position of inserted key
+         */
         int insert(String key) {
             // move keys and childNodes to right
             if (keys[0] == null) {
@@ -106,6 +143,13 @@ public class BTree {
             return 0;
         }
 
+        /**
+         * Search key in a range
+         * @param node subtree
+         * @param key1 search key 1
+         * @param key2 search key 2
+         * @return List of keys
+         */
         @Override
         List<String> search(Node node, String key1, String key2) {
             if (node instanceof LeafNode) {
@@ -126,10 +170,17 @@ public class BTree {
     }
 
     private static class LeafNode extends Node {
+        // left leaf node
         LeafNode leftLeafNode;
+        // right leaf node
         LeafNode rightLeafNode;
+        // initialize rids (rid = 0 based on project description)
         Integer[] rids = new Integer[NODE_FANOUT - 1];
 
+        /**
+         * Delete key from the node
+         * @param key
+         */
         void delete(String key) {
             for (int i = 0; i < keys.length; i++) {
                 if (keys[i] == null) break;
@@ -142,18 +193,31 @@ public class BTree {
             throw new KeyNotFoundException(key);
         }
 
+        /**
+         * Shift keys and rids from index = start to the left
+         * @param start position start to shift
+         */
         @Override
         void shiftLeft(int start) {
             super.shiftLeft(start);
             Util.shiftLeft(rids, start);
         }
 
+        /**
+         * Shift keys and rids from index = start to the right
+         * @param start position start to shift
+         */
         @Override
         void shiftRight(int start) {
             super.shiftRight(start);
             Util.shiftRight(rids, start);
         }
 
+        /**
+         * Check key is exist or not
+         * @param key
+         * @return true if key exist else false
+         */
         boolean keyExist(String key) {
             for (String s : keys) {
                 if (s == null) return false;
@@ -163,6 +227,10 @@ public class BTree {
             return false;
         }
 
+        /**
+         * Insert key to node
+         * @param key
+         */
         void insert(String key) {
             if (keys[0] == null) {
                 keys[0] = key;
@@ -183,6 +251,13 @@ public class BTree {
             }
         }
 
+        /**
+         * Search key in a range
+         * @param node subtree
+         * @param key1 search key 1
+         * @param key2 search key 2
+         * @return List of keys
+         */
         @Override
         List<String> search(Node node, String key1, String key2) {
             List<String> result = new ArrayList<>();
@@ -232,13 +307,16 @@ public class BTree {
         System.out.println("Building an initial B+-tree... Launching the B+-tree test program...");
         File f = new File(filename);
         Scanner s = new Scanner(f);
-        int i = 0;
         while (s.hasNextLine()) {
             insert(s.nextLine());
         }
         s.close();
     }
 
+    /**
+     * Insert key to tree
+     * @param key
+     */
     public void insert(String key) {
         if (root == null) {
             root = new LeafNode();
@@ -248,6 +326,12 @@ public class BTree {
         dataEntries++;
     }
 
+    /**
+     * Insert key to subtree
+     * @param node subtree
+     * @param key
+     * @return overflow data
+     */
     private OverflowData insert(Node node, String key) {
         if (node instanceof LeafNode) {
             if (((LeafNode) node).keyExist(key))
@@ -313,6 +397,12 @@ public class BTree {
         }
     }
 
+    /**
+     * Split leaf node
+     * @param fullLeafNode The leaf node with no space
+     * @param key
+     * @return leaf node
+     */
     private LeafNode splitLeafNode(LeafNode fullLeafNode, String key) {
         LeafNode newLeafNode = new LeafNode();
         totalNode++;
@@ -348,6 +438,13 @@ public class BTree {
         return newLeafNode;
     }
 
+    /**
+     * Split index node
+     * @param node The leaf node with no space
+     * @param overflow overflow data from leaf
+     * @param childPos position of child node
+     * @return overflow data (right node and key)
+     */
     private OverflowData splitIndexNode(IndexNode node, OverflowData overflow, int childPos) {
         IndexNode right = new IndexNode();
         totalNode++;
@@ -387,6 +484,10 @@ public class BTree {
         return data;
     }
 
+    /**
+     * Delete a key from the tree starting from root
+     * @param key key to be deleted
+     */
     public void delete(String key) {
         if (root == null)
             throw new TreeIsEmptyException();
@@ -400,6 +501,11 @@ public class BTree {
         }
     }
 
+    /**
+     * Delete a key from the tree starting from given node
+     * @param key key to be deleted
+     * @param node current node
+     */
     private void delete(String key, Node node) {
         if (node instanceof LeafNode) {
             ((LeafNode) node).delete(key);
@@ -515,6 +621,11 @@ public class BTree {
         }
     }
 
+    /**
+     * Merge Leaf node
+     * @param left left leaf need to merge
+     * @param right right leaf need to merge
+     */
     private void mergeLeafNode(Node left, Node right) {
         Util.mergeArray(left.keys, right.keys);
         Util.mergeArray(((LeafNode) left).rids, ((LeafNode) right).rids);
@@ -524,12 +635,21 @@ public class BTree {
             rightNode.leftLeafNode = (LeafNode) left;
     }
 
+    /**
+     * Search tree by range
+     * @param key1 First key
+     * @param key2 Second key
+     * @return List of keys
+     */
     public List<String> search(String key1, String key2) {
         if (root == null)
             throw new TreeIsEmptyException();
         return root.search(root, key1, key2);
     }
 
+    /**
+     * Print statistics of the current tree
+     */
     public void dumpStatistics() {
         double avgFillFactor = (double) (dataEntries + indexEntries) / (totalNode * (NODE_FANOUT - 1)) * 100;
         System.out.println("Statistics of the B+ Tree:");
@@ -541,12 +661,19 @@ public class BTree {
         System.out.println("Height of tree: " + height);
     }
 
+    /**
+     * Print tree from root
+     */
     public void printTree() {
         if (root == null)
             throw new TreeIsEmptyException();
         printTree(root);
     }
 
+    /**
+     * print tree from node
+     * @param n starting node to print
+     */
     public void printTree(Node n) {
         Queue<Node> nodeQueue = new LinkedList<>();
         nodeQueue.add(n);
@@ -574,24 +701,37 @@ public class BTree {
         System.out.print(stringBuilder);
     }
 
+    /**
+     * catch exception when key is not found in the tree
+     */
     public static class KeyNotFoundException extends RuntimeException {
         public KeyNotFoundException(String key) {
             super("The key \"" + key + "\" is not in the B+-tree.");
         }
     }
 
+    /**
+     * catch exception when key exists in the tree
+     */
     public static class DuplicateKeyException extends RuntimeException {
         public DuplicateKeyException(String key) {
             super("The key \"" + key + "\" is already in the B+-tree!");
         }
     }
 
+    /**
+     * catch exception when tree is empty
+     */
     public static class TreeIsEmptyException extends RuntimeException {
         public TreeIsEmptyException() {
             super("The B+-tree is empty!");
         }
     }
 
+    /**
+     * User interface
+     * @param bTree
+     */
     private static void interact(BTree bTree) {
         // Start monitor user command
         Scanner in = new Scanner(System.in);
@@ -634,6 +774,10 @@ public class BTree {
         }
     }
 
+    /**
+     * Command line argument runner
+     * @param tokens command line arguments
+     */
     private static void helpCommand(String[] tokens) {
         if (tokens.length != 1) {
             System.out.println("Invalid input.");
@@ -722,14 +866,6 @@ public class BTree {
     }
 
     public static void main(String[] args) {
-        if (false) {
-//            runTest();
-//            runTest2();
-            runTest3();
-            System.out.println("finished");
-            return;
-        }
-
         // User Interface
         if (args.length != 1) {
             System.out.println("Invalid number of arguments.");
@@ -750,441 +886,6 @@ public class BTree {
             interact(bTree);
         } catch (FileNotFoundException e) {
             System.out.println("File does not exists.");
-        }
-    }
-
-    private static void runTest() {
-        // Testing
-        BTree bPlusTree = null;
-        try {
-            bPlusTree = new BTree("data.txt");
-        } catch (FileNotFoundException e) {
-            throw new RuntimeException(e);
-        }
-
-        LeafNode leafNode1 = new LeafNode();
-        leafNode1.keys[0] = "ab";
-        leafNode1.keys[1] = "abc";
-
-        LeafNode leafNode2 = new LeafNode();
-        leafNode2.keys[0] = "b";
-        leafNode2.keys[1] = "bab";
-        leafNode2.keys[2] = "babc";
-
-        LeafNode leafNode3 = new LeafNode();
-        leafNode3.keys[0] = "c";
-        leafNode3.keys[1] = "ca";
-
-        IndexNode indexNode1 = new IndexNode();
-        indexNode1.keys[0] = "b";
-        indexNode1.keys[1] = "c";
-        indexNode1.childNodes[0] = leafNode1;
-        indexNode1.childNodes[1] = leafNode2;
-        indexNode1.childNodes[2] = leafNode3;
-
-        LeafNode leafNode4 = new LeafNode();
-        leafNode4.keys[0] = "xa";
-        leafNode4.keys[1] = "xb";
-
-        LeafNode leafNode5 = new LeafNode();
-        leafNode5.keys[0] = "ya";
-        leafNode5.keys[1] = "yb";
-        leafNode5.keys[2] = "yc";
-
-        LeafNode leafNode6 = new LeafNode();
-        leafNode6.keys[0] = "za";
-        leafNode6.keys[1] = "zb";
-
-        IndexNode indexNode2 = new IndexNode();
-        indexNode2.keys[0] = "ya";
-        indexNode2.keys[1] = "za";
-        indexNode2.childNodes[0] = leafNode4;
-        indexNode2.childNodes[1] = leafNode5;
-        indexNode2.childNodes[2] = leafNode6;
-
-        leafNode1.rightLeafNode = leafNode2;
-        leafNode2.rightLeafNode = leafNode3;
-        leafNode3.rightLeafNode = leafNode4;
-        leafNode4.rightLeafNode = leafNode5;
-        leafNode5.rightLeafNode = leafNode6;
-
-        bPlusTree.root = new IndexNode();
-        bPlusTree.root.keys[0] = "xa";
-        ((IndexNode) bPlusTree.root).childNodes[0] = indexNode1;
-        ((IndexNode) bPlusTree.root).childNodes[1] = indexNode2;
-        bPlusTree.printTree();
-
-        System.out.println();
-        System.out.println("Search bab - y:");
-        List<String> result = bPlusTree.search("bab", "y");
-        for (String s : result)
-            System.out.print(s + " ");
-        System.out.println();
-
-        System.out.println();
-        System.out.println("Delete bab:");
-        bPlusTree.delete("bab");
-        bPlusTree.printTree();
-
-        System.out.println();
-        System.out.println("Delete b:");
-        bPlusTree.delete("b");
-        bPlusTree.printTree();
-
-        System.out.println();
-        System.out.println("Delete za:");
-        bPlusTree.delete("za");
-        bPlusTree.printTree();
-
-        System.out.println();
-        System.out.println("Delete yc:");
-        bPlusTree.delete("yc");
-        bPlusTree.printTree();
-
-        System.out.println();
-        System.out.println("Delete c:");
-        bPlusTree.delete("c");
-        bPlusTree.printTree();
-
-        System.out.println();
-        System.out.println("Delete xa:");
-        bPlusTree.delete("xa");
-        bPlusTree.printTree();
-
-        System.out.println();
-        System.out.println("Delete yb:");
-        bPlusTree.delete("yb");
-        bPlusTree.printTree();
-    }
-
-    private static void runTest2() {
-        BTree bPlusTree = null;
-        try {
-            bPlusTree = new BTree("123.txt");
-        } catch (FileNotFoundException e) {
-            throw new RuntimeException(e);
-        }
-
-        bPlusTree.insert("ac");
-        bPlusTree.insert("qk");
-        bPlusTree.insert("jj");
-        bPlusTree.insert("ip");
-        bPlusTree.insert("yl");
-        bPlusTree.insert("pc");
-        bPlusTree.insert("qn");
-        bPlusTree.insert("ls");
-        bPlusTree.insert("qo");
-        bPlusTree.insert("xw");
-        bPlusTree.insert("jf");
-        bPlusTree.insert("qt");
-        bPlusTree.insert("pz");
-        bPlusTree.insert("ft");
-        bPlusTree.insert("ck");
-        bPlusTree.insert("ch");
-        bPlusTree.insert("nt");
-        bPlusTree.insert("tg");
-        bPlusTree.insert("ok");
-        bPlusTree.insert("hv");
-
-        bPlusTree.printTree();
-    }
-
-    private static void runTest3() {
-        BTree bPlusTree = null;
-        try {
-            bPlusTree = new BTree("data.txt");
-        } catch (FileNotFoundException e) {
-            throw new RuntimeException(e);
-        }
-        System.out.println();
-
-        bPlusTree.printTree();
-        System.out.println();
-
-        bPlusTree.dumpStatistics();
-        System.out.println();
-
-        System.out.println("Search a - z");
-        searchCommand(new String[]{"", "a", "z"}, bPlusTree);
-        System.out.println();
-
-        System.out.println("Search z - a");
-        searchCommand(new String[]{"", "z", "a"}, bPlusTree);
-        System.out.println();
-
-        System.out.println("Search good - good");
-        searchCommand(new String[]{"", "good", "good"}, bPlusTree);
-        System.out.println();
-
-        System.out.println("Insert likes");
-        insertCommand(new String[]{"", "likes"}, bPlusTree);
-        bPlusTree.printTree();
-        System.out.println();
-
-        System.out.println("Insert hold");
-        insertCommand(new String[]{"", "hold"}, bPlusTree);
-        bPlusTree.printTree();
-        System.out.println();
-
-        System.out.println("Insert fish");
-        insertCommand(new String[]{"", "fish"}, bPlusTree);
-        bPlusTree.printTree();
-        System.out.println();
-
-        bPlusTree.dumpStatistics();
-        System.out.println();
-
-        System.out.println("Insert general");
-        insertCommand(new String[]{"", "general"}, bPlusTree);
-        bPlusTree.printTree();
-        System.out.println();
-
-        bPlusTree.dumpStatistics();
-        System.out.println();
-
-        System.out.println("Search a - z");
-        searchCommand(new String[]{"", "a", "z"}, bPlusTree);
-        System.out.println();
-
-        System.out.println("Search z - a");
-        searchCommand(new String[]{"", "z", "a"}, bPlusTree);
-        System.out.println();
-
-        System.out.println("Search spark - fly");
-        searchCommand(new String[]{"", "spark", "fly"}, bPlusTree);
-        System.out.println();
-
-        System.out.println("Search general - like");
-        searchCommand(new String[]{"", "spark", "fly"}, bPlusTree);
-        System.out.println();
-
-        System.out.println("Insert apple");
-        insertCommand(new String[]{"", "apple"}, bPlusTree);
-        bPlusTree.printTree();
-        System.out.println();
-
-        System.out.println("Insert as");
-        insertCommand(new String[]{"", "as"}, bPlusTree);
-        bPlusTree.printTree();
-        System.out.println();
-
-        System.out.println("Insert at");
-        insertCommand(new String[]{"", "at"}, bPlusTree);
-        bPlusTree.printTree();
-        System.out.println();
-
-        System.out.println("Insert ask");
-        insertCommand(new String[]{"", "ask"}, bPlusTree);
-        bPlusTree.printTree();
-        System.out.println();
-
-        System.out.println("Insert asks");
-        insertCommand(new String[]{"", "asks"}, bPlusTree);
-        bPlusTree.printTree();
-        System.out.println();
-
-        System.out.println("Insert ack");
-        insertCommand(new String[]{"", "ack"}, bPlusTree);
-        bPlusTree.printTree();
-        System.out.println();
-
-        bPlusTree.dumpStatistics();
-        System.out.println();
-
-        System.out.println("Search a - z");
-        searchCommand(new String[]{"", "a", "z"}, bPlusTree);
-        System.out.println();
-
-        System.out.println("Search z - a");
-        searchCommand(new String[]{"", "z", "a"}, bPlusTree);
-        System.out.println();
-
-        System.out.println("Insert are");
-        insertCommand(new String[]{"", "are"}, bPlusTree);
-        bPlusTree.printTree();
-        System.out.println();
-
-        System.out.println("Insert again");
-        insertCommand(new String[]{"", "again"}, bPlusTree);
-        bPlusTree.printTree();
-        System.out.println();
-
-        System.out.println("Insert hort");
-        insertCommand(new String[]{"", "hort"}, bPlusTree);
-        bPlusTree.printTree();
-        System.out.println();
-
-        System.out.println("Insert hpv");
-        insertCommand(new String[]{"", "hpv"}, bPlusTree);
-        bPlusTree.printTree();
-        System.out.println();
-
-        System.out.println("Insert yo");
-        insertCommand(new String[]{"", "yo"}, bPlusTree);
-        bPlusTree.printTree();
-        System.out.println();
-
-        System.out.println("Insert zebra");
-        insertCommand(new String[]{"", "zebra"}, bPlusTree);
-        bPlusTree.printTree();
-        System.out.println();
-
-        System.out.println("Insert zero");
-        insertCommand(new String[]{"", "zero"}, bPlusTree);
-        bPlusTree.printTree();
-        System.out.println();
-
-        System.out.println("Insert you");
-        insertCommand(new String[]{"", "you"}, bPlusTree);
-        bPlusTree.printTree();
-        System.out.println();
-
-        System.out.println("Insert yuu");
-        insertCommand(new String[]{"", "yuu"}, bPlusTree);
-        bPlusTree.printTree();
-        System.out.println();
-
-        bPlusTree.dumpStatistics();
-        System.out.println();
-
-        System.out.println("Search a - zzz");
-        searchCommand(new String[]{"", "a", "zzz"}, bPlusTree);
-        System.out.println();
-
-        System.out.println("Search zzz - a");
-        searchCommand(new String[]{"", "zzz", "a"}, bPlusTree);
-        System.out.println();
-
-        System.out.println("Insert your");
-        insertCommand(new String[]{"", "your"}, bPlusTree);
-        bPlusTree.printTree();
-        System.out.println();
-
-        bPlusTree.dumpStatistics();
-        System.out.println();
-
-        System.out.println("Insert zara");
-        insertCommand(new String[]{"", "zara"}, bPlusTree);
-        bPlusTree.printTree();
-        System.out.println();
-
-        bPlusTree.dumpStatistics();
-        System.out.println();
-
-        System.out.println("Insert zbrush");
-        insertCommand(new String[]{"", "zbrush"}, bPlusTree);
-        bPlusTree.printTree();
-        System.out.println();
-
-        bPlusTree.dumpStatistics();
-        System.out.println();
-
-        System.out.println("Insert zip");
-        insertCommand(new String[]{"", "zip"}, bPlusTree);
-        bPlusTree.printTree();
-        System.out.println();
-
-        bPlusTree.dumpStatistics();
-        System.out.println();
-
-        System.out.println("Insert zurich");
-        insertCommand(new String[]{"", "zurich"}, bPlusTree);
-        bPlusTree.printTree();
-        System.out.println();
-
-        bPlusTree.dumpStatistics();
-        System.out.println();
-
-        System.out.println("Insert zz");
-        insertCommand(new String[]{"", "zz"}, bPlusTree);
-        bPlusTree.printTree();
-        System.out.println();
-
-        bPlusTree.dumpStatistics();
-        System.out.println();
-
-        System.out.println("Insert zzz");
-        insertCommand(new String[]{"", "zzz"}, bPlusTree);
-        bPlusTree.printTree();
-        System.out.println();
-
-        bPlusTree.dumpStatistics();
-        System.out.println();
-
-        System.out.println("Insert zzzz");
-        insertCommand(new String[]{"", "zzzz"}, bPlusTree);
-        bPlusTree.printTree();
-        System.out.println();
-
-        bPlusTree.dumpStatistics();
-        System.out.println();
-
-        System.out.println("Insert zzzzz");
-        insertCommand(new String[]{"", "zzzzz"}, bPlusTree);
-        bPlusTree.printTree();
-        System.out.println();
-
-        bPlusTree.dumpStatistics();
-        System.out.println();
-
-        System.out.println("Insert zzzzzz");
-        insertCommand(new String[]{"", "zzzzzz"}, bPlusTree);
-        bPlusTree.printTree();
-        System.out.println();
-
-        bPlusTree.dumpStatistics();
-        System.out.println();
-
-        System.out.println("Insert zzzzzzz");
-        insertCommand(new String[]{"", "zzzzzzz"}, bPlusTree);
-        bPlusTree.printTree();
-        System.out.println();
-
-        bPlusTree.dumpStatistics();
-        System.out.println();
-
-        System.out.println("Search a - zzzzzzz");
-        searchCommand(new String[]{"", "a", "zzzzzzz"}, bPlusTree);
-        System.out.println();
-
-        System.out.println("Search zzzzzzz - a");
-        searchCommand(new String[]{"", "zzzzzzz", "a"}, bPlusTree);
-        System.out.println();
-
-        System.out.println("Delete zzzzzzzz");
-        deleteCommand(new String[]{"", "zzzzzzzz"}, bPlusTree);
-        bPlusTree.printTree();
-        System.out.println();
-
-        bPlusTree.dumpStatistics();
-        System.out.println();
-
-        System.out.println("Search a - zzzzzzz");
-        searchCommand(new String[]{"", "a", "zzzzzzz"}, bPlusTree);
-        System.out.println();
-
-        System.out.println("Search zzzzzzz - a");
-        searchCommand(new String[]{"", "zzzzzzz", "a"}, bPlusTree);
-        System.out.println();
-
-        List<String> keys = bPlusTree.search("a", "zzzzzzz");
-//        for (int i = keys.size() - 1; i >= 0 ; i--) {
-        for (int i = 0; i < keys.size() ; i++) {
-            System.out.println("Delete " + keys.get(i));
-            deleteCommand(new String[]{"", keys.get(i)}, bPlusTree);
-            printCommand(new String[]{""}, bPlusTree);
-            System.out.println();
-
-            bPlusTree.dumpStatistics();
-            System.out.println();
-
-            System.out.println("Search a - zzzzzzz");
-            searchCommand(new String[]{"", "a", "zzzzzzz"}, bPlusTree);
-            System.out.println();
-
-            System.out.println("Search zzzzzzz - a");
-            searchCommand(new String[]{"", "zzzzzzz", "a"}, bPlusTree);
-            System.out.println();
         }
     }
 }
