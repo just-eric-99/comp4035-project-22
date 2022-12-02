@@ -4,20 +4,18 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 public class BTree {
-    private static final double minFillFactor = 0.5;
-    private static final int fanout = 5;
+    private static final double MIN_FILL_FACTOR = 0.5;
+    private static final int NODE_FANOUT = 5;
     // In this project, record id is static
     private static final int rid = 0;
-
     private Node root = null;
-
     private int totalNode = 0;
     private int height = 0;
     private int dataEntries = 0;
     private int indexEntries = 0;
 
     private static abstract class Node {
-        String[] keys = new String[fanout - 1];
+        String[] keys = new String[NODE_FANOUT - 1];
 
         // fillFactor * (fanout - 1)
         double fillFactor() {
@@ -26,16 +24,11 @@ public class BTree {
                 if (k == null) break;
                 count++;
             }
-            System.out.println("current fillFactor: " + ((double) count / keys.length));
             return (double) count / keys.length;
         }
 
         boolean isFull() {
             return keys[keys.length - 1] != null;
-        }
-
-        void sort() {
-            Arrays.sort(keys);
         }
 
         void shiftLeft() {
@@ -60,7 +53,7 @@ public class BTree {
         public String toString() {
             StringBuilder s = new StringBuilder();
             for (String key : keys) {
-                s.append(key == null ? "-" : key).append(" ");
+                s.append(key == null ? "" : key + " ");
             }
             s = new StringBuilder(s.toString().trim());
             return "[" + s + "]";
@@ -68,7 +61,7 @@ public class BTree {
     }
 
     private static class IndexNode extends Node {
-        Node[] childNodes = new Node[fanout];
+        Node[] childNodes = new Node[NODE_FANOUT];
 
         @Override
         void shiftLeft(int start) {
@@ -135,7 +128,7 @@ public class BTree {
     private static class LeafNode extends Node {
         LeafNode leftLeafNode;
         LeafNode rightLeafNode;
-        Integer[] rids = new Integer[fanout - 1];
+        Integer[] rids = new Integer[NODE_FANOUT - 1];
 
         void delete(String key) {
             for (int i = 0; i < keys.length; i++) {
@@ -161,25 +154,31 @@ public class BTree {
             Util.shiftRight(rids, start);
         }
 
-        boolean keyIsFull() {
-            return keys[keys.length - 1] != null;
+        boolean keyExist(String key) {
+            for (String s : keys) {
+                if (s == null) return false;
+                if (key.compareTo(s) == 0)
+                    return true;
+            }
+            return false;
         }
 
         void insert(String key) {
             if (keys[0] == null) {
                 keys[0] = key;
+                rids[0] = rid;
                 return;
             }
             for (int i = 0; i < keys.length; i++) {
                 if (keys[i] == null) {
                     keys[i] = key;
+                    rids[i] = rid;
                     return;
                 } else if (key.compareTo(keys[i]) < 0) {
                     shiftRight(i);
                     keys[i] = key;
+                    rids[i] = rid;
                     return;
-                } else if (key.compareTo(keys[i]) == 0) {
-                    throw new DuplicateKeyException(key);
                 }
             }
         }
@@ -188,17 +187,32 @@ public class BTree {
         List<String> search(Node node, String key1, String key2) {
             List<String> result = new ArrayList<>();
             LeafNode ln = (LeafNode) node;
-            while (ln != null) {
-                for (String k : ln.keys) {
-                    if (k == null) break;
+            if (key1.compareTo(key2) <= 0) {
+                while (ln != null) {
+                    for (String k : ln.keys) {
+                        if (k == null) break;
 
-                    if (key2.compareTo(k) < 0)
-                        return result;
+                        if (key2.compareTo(k) < 0)
+                            return result;
 
-                    if (key1.compareTo(k) <= 0 && key2.compareTo(k) >= 0)
-                        result.add(k);
+                        if (key1.compareTo(k) <= 0 && key2.compareTo(k) >= 0)
+                            result.add(k);
+                    }
+                    ln = ln.rightLeafNode;
                 }
-                ln = ln.rightLeafNode;
+            } else {
+                while (ln != null) {
+                    for (int i = ln.keys.length - 1; i >= 0; i--) {
+                        if (ln.keys[i] == null) continue;
+
+                        if (key2.compareTo(ln.keys[i]) > 0)
+                            return result;
+
+                        if (key1.compareTo(ln.keys[i]) >= 0 && key2.compareTo(ln.keys[i]) <= 0)
+                            result.add(ln.keys[i]);
+                    }
+                    ln = ln.leftLeafNode;
+                }
             }
             return result;
         }
@@ -220,29 +234,25 @@ public class BTree {
         Scanner s = new Scanner(f);
         int i = 0;
         while (s.hasNextLine()) {
-            System.out.println("round: " + (++i));
-            if (i == 16) break;
             insert(s.nextLine());
         }
         s.close();
     }
 
-    public BTree() {
-    }
-
-    void insert(String key) {
-        dataEntries++;
+    public void insert(String key) {
         if (root == null) {
             root = new LeafNode();
             totalNode++;
-            ((LeafNode) root).insert(key);
-            return;
         }
         insert(root, key);
+        dataEntries++;
     }
 
     private OverflowData insert(Node node, String key) {
         if (node instanceof LeafNode) {
+            if (((LeafNode) node).keyExist(key))
+                throw new DuplicateKeyException(key);
+
             if (node.isFull()) {
                 if (node == root) {
                     IndexNode newRoot = new IndexNode();
@@ -303,11 +313,11 @@ public class BTree {
         }
     }
 
-    LeafNode splitLeafNode(LeafNode fullLeafNode, String key) {
+    private LeafNode splitLeafNode(LeafNode fullLeafNode, String key) {
         LeafNode newLeafNode = new LeafNode();
         totalNode++;
         indexEntries++;
-        int mid = fanout / 2;
+        int mid = NODE_FANOUT / 2;
 
         // 2, 3 -> 0, 1
         for (int i = mid; i < fullLeafNode.keys.length; i++) {
@@ -326,22 +336,35 @@ public class BTree {
             newLeafNode.insert(key);
         }
 
+        LeafNode right = null;
+        if (fullLeafNode.rightLeafNode != null) {
+            right = fullLeafNode.rightLeafNode;
+            right.leftLeafNode = newLeafNode;
+        }
+
         fullLeafNode.rightLeafNode = newLeafNode;
         newLeafNode.leftLeafNode = fullLeafNode;
-
+        newLeafNode.rightLeafNode = right;
         return newLeafNode;
     }
 
-    OverflowData splitIndexNode(IndexNode node, OverflowData overflow, int childPos) {
+    private OverflowData splitIndexNode(IndexNode node, OverflowData overflow, int childPos) {
         IndexNode right = new IndexNode();
         totalNode++;
-        int mid = fanout / 2;
-        OverflowData last = new OverflowData(node.keys[node.keys.length - 1], node.childNodes[node.childNodes.length - 1]);
+        int mid = NODE_FANOUT / 2;
+        OverflowData last;
+        if (childPos == NODE_FANOUT - 1) {
+            last = overflow;
+        } else  {
+            last = new OverflowData(node.keys[node.keys.length - 1], node.childNodes[node.childNodes.length - 1]);
+        }
 
-        Util.shiftRight(node.keys, childPos);
-        Util.shiftRight(node.childNodes, childPos + 1);
-        node.keys[childPos] = overflow.key;
-        node.childNodes[childPos + 1] = overflow.node;
+        if (childPos < NODE_FANOUT - 1) {
+            Util.shiftRight(node.keys, childPos);
+            Util.shiftRight(node.childNodes, childPos + 1);
+            node.keys[childPos] = overflow.key;
+            node.childNodes[childPos + 1] = overflow.node;
+        }
 
         OverflowData data = new OverflowData(node.keys[mid], right);
         right.childNodes[0] = node.childNodes[mid + 1];
@@ -365,8 +388,16 @@ public class BTree {
     }
 
     public void delete(String key) {
-        if (root == null) return;
+        if (root == null)
+            throw new TreeIsEmptyException();
+
         delete(key, root);
+        dataEntries--;
+
+        if (root instanceof LeafNode && root.keys[0] == null) {
+            root = null;
+            totalNode--;
+        }
     }
 
     private void delete(String key, Node node) {
@@ -393,7 +424,7 @@ public class BTree {
 
         // Check fill factor
         // Not underflow
-        if (currentNode.fillFactor() >= minFillFactor)
+        if (currentNode.fillFactor() >= MIN_FILL_FACTOR)
             return;
 
         Node leftSibling = null;
@@ -406,7 +437,7 @@ public class BTree {
 
         // Underflow
         // If have left Sibling
-        if (leftSibling != null && leftSibling.fillFactor() - (double) 1 / (fanout - 1) >= minFillFactor) {
+        if (leftSibling != null && leftSibling.fillFactor() - (double) 1 / (NODE_FANOUT - 1) >= MIN_FILL_FACTOR) {
             for (int j = 0; j < leftSibling.keys.length; j++) {
                 // Find last item
                 if (j == leftSibling.keys.length - 1 || leftSibling.keys[j + 1] == null) {
@@ -427,7 +458,7 @@ public class BTree {
                     break;
                 }
             }
-        } else if (rightSibling != null && rightSibling.fillFactor() - (double) 1 / (fanout - 1) >= minFillFactor) {
+        } else if (rightSibling != null && rightSibling.fillFactor() - (double) 1 / (NODE_FANOUT - 1) >= MIN_FILL_FACTOR) {
             for (int j = 0; j < currentNode.keys.length; j++) {
                 // Find first space
                 if (currentNode.keys[j] == null) {
@@ -460,7 +491,7 @@ public class BTree {
                 indexEntries--;
             } else if (currentNode instanceof IndexNode) {
                 if (rightSibling == null) {
-                    in.shiftRight();
+                    Util.shiftRight(currentNode.keys);
                     currentNode.keys[0] = in.keys[i - 1];
                     Util.mergeArray(leftSibling.keys, currentNode.keys);
                     Util.mergeArray(((IndexNode) leftSibling).childNodes, ((IndexNode) currentNode).childNodes);
@@ -488,27 +519,31 @@ public class BTree {
         Util.mergeArray(left.keys, right.keys);
         Util.mergeArray(((LeafNode) left).rids, ((LeafNode) right).rids);
         ((LeafNode) left).rightLeafNode = ((LeafNode) right).rightLeafNode;
-        if (((LeafNode) right).rightLeafNode.rightLeafNode != null) {
-            ((LeafNode) right).rightLeafNode.rightLeafNode.leftLeafNode = (LeafNode) left;
-        }
+        LeafNode rightNode = ((LeafNode) right).rightLeafNode;
+        if (rightNode != null && rightNode.rightLeafNode != null)
+            rightNode.leftLeafNode = (LeafNode) left;
     }
 
     public List<String> search(String key1, String key2) {
+        if (root == null)
+            throw new TreeIsEmptyException();
         return root.search(root, key1, key2);
     }
 
     public void dumpStatistics() {
-        double avgFillFactor = (double) (dataEntries + indexEntries) / (totalNode * (fanout - 1)) * 100;
+        double avgFillFactor = (double) (dataEntries + indexEntries) / (totalNode * (NODE_FANOUT - 1)) * 100;
         System.out.println("Statistics of the B+ Tree:");
         System.out.println("Total number of nodes: " + totalNode);
         System.out.println("Total number of data entries: " + dataEntries);
         System.out.println("Total number of index entries: " + indexEntries);
-        System.out.printf("Average fill factor: %.2f", avgFillFactor);
+        System.out.printf("Average fill factor: %d", (int) avgFillFactor);
         System.out.println("%");
         System.out.println("Height of tree: " + height);
     }
 
     public void printTree() {
+        if (root == null)
+            throw new TreeIsEmptyException();
         printTree(root);
     }
 
@@ -516,49 +551,44 @@ public class BTree {
         Queue<Node> nodeQueue = new LinkedList<>();
         nodeQueue.add(n);
         StringBuilder stringBuilder = new StringBuilder();
-        String spacing = "\t\t\t\t\t\t\t";
-        int level = height;
 
-        for (int i = 0; i < level; i++) {
-            stringBuilder.append(spacing);
-        }
-        level--;
         while (!nodeQueue.isEmpty()) {
             int size = nodeQueue.size();
             StringBuilder s = new StringBuilder();
             for (int i = 0; i < size; i++) {
                 Node node = nodeQueue.poll();
-                if (i > 0) {
-                    s.append(", ");
-                }
-                if (node == null) {
-                    s.append("-");
-                } else {
+                if (node != null) {
+                    if (i > 0) {
+                        s.append(", ");
+                    }
                     s.append(node);
                 }
+
                 if (node instanceof IndexNode) {
-                    Collections.addAll(nodeQueue, ((IndexNode) node).childNodes);
+                    nodeQueue.addAll(Arrays.asList(((IndexNode) node).childNodes));
                 }
             }
 
             stringBuilder.append(s).append("\n");
-            for (int j = 0; j < level; j++) {
-                stringBuilder.append(spacing);
-            }
-            level--;
         }
         System.out.print(stringBuilder);
     }
 
     public static class KeyNotFoundException extends RuntimeException {
         public KeyNotFoundException(String key) {
-            super("The key " + key + " is not in the B+-tree.");
+            super("The key \"" + key + "\" is not in the B+-tree.");
         }
     }
 
     public static class DuplicateKeyException extends RuntimeException {
         public DuplicateKeyException(String key) {
-            super("The key " + key + " is already in the B+-tree!");
+            super("The key \"" + key + "\" is already in the B+-tree!");
+        }
+    }
+
+    public static class TreeIsEmptyException extends RuntimeException {
+        public TreeIsEmptyException() {
+            super("The B+-tree is empty!");
         }
     }
 
@@ -568,8 +598,16 @@ public class BTree {
         while (true) {
             System.out.print("Waiting for your commands: ");
             String input = in.nextLine();
+            if (input.isEmpty()) {
+                System.out.println("Invalid input.");
+                continue;
+            }
+
             String[] tokens = input.split("\\s+");
             switch (tokens[0].toLowerCase().trim()) {
+                case "commands":
+                    helpCommand(tokens);
+                    break;
                 case "insert":
                     insertCommand(tokens, bTree);
                     break;
@@ -588,11 +626,26 @@ public class BTree {
                 case "quit":
                     System.out.println("The program is terminated.");
                     return;
+
                 default:
                     System.out.println("Invalid input.");
             }
             System.out.println();
         }
+    }
+
+    private static void helpCommand(String[] tokens) {
+        if (tokens.length != 1) {
+            System.out.println("Invalid input.");
+            return;
+        }
+        System.out.println("The following commands are supported:");
+        System.out.println("insert <key> <rid>");
+        System.out.println("delete <key>");
+        System.out.println("search <key1> <key2>");
+        System.out.println("print");
+        System.out.println("stats");
+        System.out.println("quit");
     }
 
     private static void insertCommand(String[] tokens, BTree bTree) {
@@ -620,7 +673,7 @@ public class BTree {
         try {
             bTree.delete(key);
             System.out.println("The key " + key + " has been deleted in the B+-tree.");
-        } catch (KeyNotFoundException e) {
+        } catch (KeyNotFoundException | TreeIsEmptyException e) {
             System.out.println(e.getMessage());
         }
     }
@@ -631,21 +684,21 @@ public class BTree {
             return;
         }
 
-        if (tokens[1].compareTo(tokens[2]) > 0) {
-            System.out.println("key2 (" + tokens[2] + ") should be smaller than or equal to key1 (" + tokens[1] + ")");
-            return;
-        }
+        try {
+            List<String> result = bTree.search(tokens[1], tokens[2]);
+            if (result.isEmpty()) {
+                System.out.println("No result for range " + tokens[1] + " - " + tokens[2]);
+                return;
+            }
 
-        List<String> result = bTree.search(tokens[1], tokens[2]);
-        if (result.isEmpty()) {
-            System.out.println("No result for range " + tokens[1] + " - " + tokens[2]);
-            return;
+            System.out.println("Result (" + result.size() + " data(s)): ");
+            System.out.println(result.stream()
+                    .map(String::valueOf)
+                    .collect(Collectors.joining(", "))
+            );
+        } catch (TreeIsEmptyException e) {
+            System.out.println(e.getMessage());
         }
-
-        System.out.println(result.stream()
-                .map(String::valueOf)
-                .collect(Collectors.joining(", "))
-        );
     }
 
     private static void printCommand(String[] tokens, BTree bTree) {
@@ -653,7 +706,11 @@ public class BTree {
             System.out.println("Invalid number of arguments.");
             return;
         }
-        bTree.printTree();
+        try {
+            bTree.printTree();
+        } catch (TreeIsEmptyException e) {
+            System.out.println(e.getMessage());
+        }
     }
 
     private static void statsCommand(String[] tokens, BTree bTree) {
@@ -665,9 +722,14 @@ public class BTree {
     }
 
     public static void main(String[] args) {
-//        runTest();
-        runTest2();
-        System.out.println("finished");
+        if (false) {
+//            runTest();
+//            runTest2();
+            runTest3();
+            System.out.println("finished");
+            return;
+        }
+
         // User Interface
         if (args.length != 1) {
             System.out.println("Invalid number of arguments.");
@@ -796,7 +858,12 @@ public class BTree {
     }
 
     private static void runTest2() {
-        BTree bPlusTree = new BTree();
+        BTree bPlusTree = null;
+        try {
+            bPlusTree = new BTree("123.txt");
+        } catch (FileNotFoundException e) {
+            throw new RuntimeException(e);
+        }
 
         bPlusTree.insert("ac");
         bPlusTree.insert("qk");
@@ -820,5 +887,304 @@ public class BTree {
         bPlusTree.insert("hv");
 
         bPlusTree.printTree();
+    }
+
+    private static void runTest3() {
+        BTree bPlusTree = null;
+        try {
+            bPlusTree = new BTree("data.txt");
+        } catch (FileNotFoundException e) {
+            throw new RuntimeException(e);
+        }
+        System.out.println();
+
+        bPlusTree.printTree();
+        System.out.println();
+
+        bPlusTree.dumpStatistics();
+        System.out.println();
+
+        System.out.println("Search a - z");
+        searchCommand(new String[]{"", "a", "z"}, bPlusTree);
+        System.out.println();
+
+        System.out.println("Search z - a");
+        searchCommand(new String[]{"", "z", "a"}, bPlusTree);
+        System.out.println();
+
+        System.out.println("Search good - good");
+        searchCommand(new String[]{"", "good", "good"}, bPlusTree);
+        System.out.println();
+
+        System.out.println("Insert likes");
+        insertCommand(new String[]{"", "likes"}, bPlusTree);
+        bPlusTree.printTree();
+        System.out.println();
+
+        System.out.println("Insert hold");
+        insertCommand(new String[]{"", "hold"}, bPlusTree);
+        bPlusTree.printTree();
+        System.out.println();
+
+        System.out.println("Insert fish");
+        insertCommand(new String[]{"", "fish"}, bPlusTree);
+        bPlusTree.printTree();
+        System.out.println();
+
+        bPlusTree.dumpStatistics();
+        System.out.println();
+
+        System.out.println("Insert general");
+        insertCommand(new String[]{"", "general"}, bPlusTree);
+        bPlusTree.printTree();
+        System.out.println();
+
+        bPlusTree.dumpStatistics();
+        System.out.println();
+
+        System.out.println("Search a - z");
+        searchCommand(new String[]{"", "a", "z"}, bPlusTree);
+        System.out.println();
+
+        System.out.println("Search z - a");
+        searchCommand(new String[]{"", "z", "a"}, bPlusTree);
+        System.out.println();
+
+        System.out.println("Search spark - fly");
+        searchCommand(new String[]{"", "spark", "fly"}, bPlusTree);
+        System.out.println();
+
+        System.out.println("Search general - like");
+        searchCommand(new String[]{"", "spark", "fly"}, bPlusTree);
+        System.out.println();
+
+        System.out.println("Insert apple");
+        insertCommand(new String[]{"", "apple"}, bPlusTree);
+        bPlusTree.printTree();
+        System.out.println();
+
+        System.out.println("Insert as");
+        insertCommand(new String[]{"", "as"}, bPlusTree);
+        bPlusTree.printTree();
+        System.out.println();
+
+        System.out.println("Insert at");
+        insertCommand(new String[]{"", "at"}, bPlusTree);
+        bPlusTree.printTree();
+        System.out.println();
+
+        System.out.println("Insert ask");
+        insertCommand(new String[]{"", "ask"}, bPlusTree);
+        bPlusTree.printTree();
+        System.out.println();
+
+        System.out.println("Insert asks");
+        insertCommand(new String[]{"", "asks"}, bPlusTree);
+        bPlusTree.printTree();
+        System.out.println();
+
+        System.out.println("Insert ack");
+        insertCommand(new String[]{"", "ack"}, bPlusTree);
+        bPlusTree.printTree();
+        System.out.println();
+
+        bPlusTree.dumpStatistics();
+        System.out.println();
+
+        System.out.println("Search a - z");
+        searchCommand(new String[]{"", "a", "z"}, bPlusTree);
+        System.out.println();
+
+        System.out.println("Search z - a");
+        searchCommand(new String[]{"", "z", "a"}, bPlusTree);
+        System.out.println();
+
+        System.out.println("Insert are");
+        insertCommand(new String[]{"", "are"}, bPlusTree);
+        bPlusTree.printTree();
+        System.out.println();
+
+        System.out.println("Insert again");
+        insertCommand(new String[]{"", "again"}, bPlusTree);
+        bPlusTree.printTree();
+        System.out.println();
+
+        System.out.println("Insert hort");
+        insertCommand(new String[]{"", "hort"}, bPlusTree);
+        bPlusTree.printTree();
+        System.out.println();
+
+        System.out.println("Insert hpv");
+        insertCommand(new String[]{"", "hpv"}, bPlusTree);
+        bPlusTree.printTree();
+        System.out.println();
+
+        System.out.println("Insert yo");
+        insertCommand(new String[]{"", "yo"}, bPlusTree);
+        bPlusTree.printTree();
+        System.out.println();
+
+        System.out.println("Insert zebra");
+        insertCommand(new String[]{"", "zebra"}, bPlusTree);
+        bPlusTree.printTree();
+        System.out.println();
+
+        System.out.println("Insert zero");
+        insertCommand(new String[]{"", "zero"}, bPlusTree);
+        bPlusTree.printTree();
+        System.out.println();
+
+        System.out.println("Insert you");
+        insertCommand(new String[]{"", "you"}, bPlusTree);
+        bPlusTree.printTree();
+        System.out.println();
+
+        System.out.println("Insert yuu");
+        insertCommand(new String[]{"", "yuu"}, bPlusTree);
+        bPlusTree.printTree();
+        System.out.println();
+
+        bPlusTree.dumpStatistics();
+        System.out.println();
+
+        System.out.println("Search a - zzz");
+        searchCommand(new String[]{"", "a", "zzz"}, bPlusTree);
+        System.out.println();
+
+        System.out.println("Search zzz - a");
+        searchCommand(new String[]{"", "zzz", "a"}, bPlusTree);
+        System.out.println();
+
+        System.out.println("Insert your");
+        insertCommand(new String[]{"", "your"}, bPlusTree);
+        bPlusTree.printTree();
+        System.out.println();
+
+        bPlusTree.dumpStatistics();
+        System.out.println();
+
+        System.out.println("Insert zara");
+        insertCommand(new String[]{"", "zara"}, bPlusTree);
+        bPlusTree.printTree();
+        System.out.println();
+
+        bPlusTree.dumpStatistics();
+        System.out.println();
+
+        System.out.println("Insert zbrush");
+        insertCommand(new String[]{"", "zbrush"}, bPlusTree);
+        bPlusTree.printTree();
+        System.out.println();
+
+        bPlusTree.dumpStatistics();
+        System.out.println();
+
+        System.out.println("Insert zip");
+        insertCommand(new String[]{"", "zip"}, bPlusTree);
+        bPlusTree.printTree();
+        System.out.println();
+
+        bPlusTree.dumpStatistics();
+        System.out.println();
+
+        System.out.println("Insert zurich");
+        insertCommand(new String[]{"", "zurich"}, bPlusTree);
+        bPlusTree.printTree();
+        System.out.println();
+
+        bPlusTree.dumpStatistics();
+        System.out.println();
+
+        System.out.println("Insert zz");
+        insertCommand(new String[]{"", "zz"}, bPlusTree);
+        bPlusTree.printTree();
+        System.out.println();
+
+        bPlusTree.dumpStatistics();
+        System.out.println();
+
+        System.out.println("Insert zzz");
+        insertCommand(new String[]{"", "zzz"}, bPlusTree);
+        bPlusTree.printTree();
+        System.out.println();
+
+        bPlusTree.dumpStatistics();
+        System.out.println();
+
+        System.out.println("Insert zzzz");
+        insertCommand(new String[]{"", "zzzz"}, bPlusTree);
+        bPlusTree.printTree();
+        System.out.println();
+
+        bPlusTree.dumpStatistics();
+        System.out.println();
+
+        System.out.println("Insert zzzzz");
+        insertCommand(new String[]{"", "zzzzz"}, bPlusTree);
+        bPlusTree.printTree();
+        System.out.println();
+
+        bPlusTree.dumpStatistics();
+        System.out.println();
+
+        System.out.println("Insert zzzzzz");
+        insertCommand(new String[]{"", "zzzzzz"}, bPlusTree);
+        bPlusTree.printTree();
+        System.out.println();
+
+        bPlusTree.dumpStatistics();
+        System.out.println();
+
+        System.out.println("Insert zzzzzzz");
+        insertCommand(new String[]{"", "zzzzzzz"}, bPlusTree);
+        bPlusTree.printTree();
+        System.out.println();
+
+        bPlusTree.dumpStatistics();
+        System.out.println();
+
+        System.out.println("Search a - zzzzzzz");
+        searchCommand(new String[]{"", "a", "zzzzzzz"}, bPlusTree);
+        System.out.println();
+
+        System.out.println("Search zzzzzzz - a");
+        searchCommand(new String[]{"", "zzzzzzz", "a"}, bPlusTree);
+        System.out.println();
+
+        System.out.println("Delete zzzzzzzz");
+        deleteCommand(new String[]{"", "zzzzzzzz"}, bPlusTree);
+        bPlusTree.printTree();
+        System.out.println();
+
+        bPlusTree.dumpStatistics();
+        System.out.println();
+
+        System.out.println("Search a - zzzzzzz");
+        searchCommand(new String[]{"", "a", "zzzzzzz"}, bPlusTree);
+        System.out.println();
+
+        System.out.println("Search zzzzzzz - a");
+        searchCommand(new String[]{"", "zzzzzzz", "a"}, bPlusTree);
+        System.out.println();
+
+        List<String> keys = bPlusTree.search("a", "zzzzzzz");
+//        for (int i = keys.size() - 1; i >= 0 ; i--) {
+        for (int i = 0; i < keys.size() ; i++) {
+            System.out.println("Delete " + keys.get(i));
+            deleteCommand(new String[]{"", keys.get(i)}, bPlusTree);
+            printCommand(new String[]{""}, bPlusTree);
+            System.out.println();
+
+            bPlusTree.dumpStatistics();
+            System.out.println();
+
+            System.out.println("Search a - zzzzzzz");
+            searchCommand(new String[]{"", "a", "zzzzzzz"}, bPlusTree);
+            System.out.println();
+
+            System.out.println("Search zzzzzzz - a");
+            searchCommand(new String[]{"", "zzzzzzz", "a"}, bPlusTree);
+            System.out.println();
+        }
     }
 }
