@@ -1,6 +1,7 @@
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.util.*;
+import java.util.stream.Collectors;
 
 public class BTree {
     private static final double minFillFactor = 0.5;
@@ -54,6 +55,16 @@ public class BTree {
         }
 
         abstract List<String> search(Node node, String key1, String key2);
+
+        @Override
+        public String toString() {
+            StringBuilder s = new StringBuilder();
+            for (String key : keys) {
+                s.append(key == null ? "-" : key).append(" ");
+            }
+            s = new StringBuilder(s.toString().trim());
+            return "[" + s + "]";
+        }
     }
 
     private static class IndexNode extends Node {
@@ -117,7 +128,7 @@ public class BTree {
                     return search(in.childNodes[++i], key1, key2);
                 }
             }
-            return new LinkedList<>();
+            return new ArrayList<>();
         }
     }
 
@@ -175,7 +186,7 @@ public class BTree {
 
         @Override
         List<String> search(Node node, String key1, String key2) {
-            List<String> result = new LinkedList<>();
+            List<String> result = new ArrayList<>();
             LeafNode ln = (LeafNode) node;
             while (ln != null) {
                 for (String k : ln.keys) {
@@ -216,9 +227,11 @@ public class BTree {
         s.close();
     }
 
-    public BTree() {}
+    public BTree() {
+    }
 
     void insert(String key) {
+        dataEntries++;
         if (root == null) {
             root = new LeafNode();
             totalNode++;
@@ -226,7 +239,6 @@ public class BTree {
             return;
         }
         insert(root, key);
-        dataEntries++;
     }
 
     private OverflowData insert(Node node, String key) {
@@ -486,11 +498,13 @@ public class BTree {
     }
 
     public void dumpStatistics() {
+        double avgFillFactor = (double) (dataEntries + indexEntries) / (totalNode * (fanout - 1)) * 100;
         System.out.println("Statistics of the B+ Tree:");
         System.out.println("Total number of nodes: " + totalNode);
         System.out.println("Total number of data entries: " + dataEntries);
         System.out.println("Total number of index entries: " + indexEntries);
-        System.out.println("Average fill factor: " + (dataEntries + indexEntries) / (totalNode * (fanout - 1)));
+        System.out.printf("Average fill factor: %.2f", avgFillFactor);
+        System.out.println("%");
         System.out.println("Height of tree: " + height);
     }
 
@@ -499,35 +513,41 @@ public class BTree {
     }
 
     public void printTree(Node n) {
-        // TODO
+        Queue<Node> nodeQueue = new LinkedList<>();
+        nodeQueue.add(n);
+        StringBuilder stringBuilder = new StringBuilder();
+        String spacing = "\t\t\t\t\t\t\t";
+        int level = height;
 
-        System.out.print("[");
-        for (int i = 0; i < n.keys.length; i++) {
-            if (n.keys[i] != null)
-                System.out.print(n.keys[i] + " ");
+        for (int i = 0; i < level; i++) {
+            stringBuilder.append(spacing);
         }
-        System.out.print("]");
-
-        if (n instanceof IndexNode) {
-            for (Node node : ((IndexNode) n).childNodes) {
-                if (node != null) {
-                    printTree(node);
-                    System.out.println();
+        level--;
+        while (!nodeQueue.isEmpty()) {
+            int size = nodeQueue.size();
+            StringBuilder s = new StringBuilder();
+            for (int i = 0; i < size; i++) {
+                Node node = nodeQueue.poll();
+                if (i > 0) {
+                    s.append(", ");
+                }
+                if (node == null) {
+                    s.append("-");
+                } else {
+                    s.append(node);
+                }
+                if (node instanceof IndexNode) {
+                    Collections.addAll(nodeQueue, ((IndexNode) node).childNodes);
                 }
             }
-        }
-    }
 
-    public void printNode(Node node) {
-        String[] keys = node.keys;
-        System.out.print("[");
-        for (int i = 0; i < keys.length; i++) {
-            if (keys[i] == null) break;
-            System.out.println(keys[i]);
-            if (i < keys.length - 1 || keys[i + 1] == null)
-                System.out.print(", ");
+            stringBuilder.append(s).append("\n");
+            for (int j = 0; j < level; j++) {
+                stringBuilder.append(spacing);
+            }
+            level--;
         }
-        System.out.print("]");
+        System.out.print(stringBuilder);
     }
 
     public static class KeyNotFoundException extends RuntimeException {
@@ -538,7 +558,7 @@ public class BTree {
 
     public static class DuplicateKeyException extends RuntimeException {
         public DuplicateKeyException(String key) {
-            super("The key " + key + " has been inserted in the B+-tree!");
+            super("The key " + key + " is already in the B+-tree!");
         }
     }
 
@@ -571,6 +591,7 @@ public class BTree {
                 default:
                     System.out.println("Invalid input.");
             }
+            System.out.println();
         }
     }
 
@@ -579,7 +600,14 @@ public class BTree {
             System.out.println("Invalid number of arguments.");
             return;
         }
-        bTree.insert(tokens[1]);
+
+        String key = tokens[1];
+        try {
+            bTree.insert(key);
+            System.out.println("The key " + key + " has been inserted in the B+-tree!");
+        } catch (DuplicateKeyException e) {
+            System.out.println(e.getMessage());
+        }
     }
 
     private static void deleteCommand(String[] tokens, BTree bTree) {
@@ -587,7 +615,14 @@ public class BTree {
             System.out.println("Invalid number of arguments.");
             return;
         }
-        bTree.delete(tokens[1]);
+
+        String key = tokens[1];
+        try {
+            bTree.delete(key);
+            System.out.println("The key " + key + " has been deleted in the B+-tree.");
+        } catch (KeyNotFoundException e) {
+            System.out.println(e.getMessage());
+        }
     }
 
     private static void searchCommand(String[] tokens, BTree bTree) {
@@ -595,7 +630,22 @@ public class BTree {
             System.out.println("Invalid number of arguments.");
             return;
         }
-        bTree.search(tokens[1], tokens[2]);
+
+        if (tokens[1].compareTo(tokens[2]) > 0) {
+            System.out.println("key2 (" + tokens[2] + ") should be smaller than or equal to key1 (" + tokens[1] + ")");
+            return;
+        }
+
+        List<String> result = bTree.search(tokens[1], tokens[2]);
+        if (result.isEmpty()) {
+            System.out.println("No result for range " + tokens[1] + " - " + tokens[2]);
+            return;
+        }
+
+        System.out.println(result.stream()
+                .map(String::valueOf)
+                .collect(Collectors.joining(", "))
+        );
     }
 
     private static void printCommand(String[] tokens, BTree bTree) {
@@ -645,7 +695,7 @@ public class BTree {
         // Testing
         BTree bPlusTree = null;
         try {
-            bPlusTree = new BTree("123.txt");
+            bPlusTree = new BTree("data.txt");
         } catch (FileNotFoundException e) {
             throw new RuntimeException(e);
         }
